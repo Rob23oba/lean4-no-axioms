@@ -450,7 +450,3 @@ theorem ZFSet.axiom_of_union : ∀ F : ZFSet, ∃ A : ZFSet, ∀ Y x, (x ∈ Y �
   intro Y x ⟨hx, hY⟩
   cnsimp only [mem_sUnion]
   exact .intro Y ⟨hY, hx⟩
-
-theorem ZFSet.axiom_of_replacement (φ : ZFSet ~> ZFSet ~> Prop') :
-    ∀ A : ZFSet, (∀ x, x ∈ A → ∃' y, φ x y ∧ ∀ y', φ x y' → y ~= y') → ∃' B : ZFSet, ∀ x, x ∈ A → ∃' y, y ∈ B ∧ φ x y := by
-  intro A hA

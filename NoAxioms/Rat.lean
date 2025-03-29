@@ -198,6 +198,8 @@ theorem Int.sub_self' (a : Int) : a - a = 0 := by
 
 theorem Int.negOfNat_eq' (x : Nat) : negOfNat x = -x := rfl
 
+theorem Int.negSucc_eq'' (x : Nat) : negSucc x = -(x + 1 : Nat) := rfl
+
 theorem Int.ofNat_mul_negOfNat' (x y : Nat) : (x * (-y) : Int) = -(x * y : Nat) := by
   rw [← Int.negOfNat_eq', Int.ofNat_mul_negOfNat]
   rfl
@@ -221,8 +223,45 @@ theorem Int.mul_assoc' (a b c : Int) : a * b * c = a * (b * c) := by
     Int.negSucc_mul_negSucc, Int.negOfNat_mul_ofNat', Int.negOfNat_mul_negSucc']
   all_goals rw [Nat.mul_assoc']
 
+#print Int.zero_succ_neg_ind
+
 theorem Int.mul_right_comm' (a b c : Int) : a * b * c = a * c * b := by
   rw [Int.mul_assoc', Int.mul_comm' b, Int.mul_assoc']
+
+theorem Nat.mul_ne_zero' {x y : Nat} (hx : x ≠ 0) (hy : y ≠ 0) : x * y ≠ 0 := by
+  rcases x with (_ | x)
+  · contradiction
+  rcases y with (_ | y)
+  · contradiction
+  rw [Nat.succ_mul_succ]
+  exact Nat.noConfusion
+
+theorem Int.zero_tdiv' (x : Int) : (0 : Int).tdiv x = 0 := by
+  unfold tdiv
+  cases x
+  · dsimp
+    rw [Nat.zero_div', Int.ofNat_zero]
+  · dsimp
+    rw [Nat.zero_div', Int.ofNat_zero, Int.neg_zero]
+
+theorem Int.mul_ne_zero' {x y : Int} (hx : x ≠ 0) (hy : y ≠ 0) : x * y ≠ 0 := by
+  intro h
+  rw [← Int.mul_tdiv_cancel'' x hy] at hx
+  rw [h] at hx
+  rw [Int.zero_tdiv'] at hx
+  contradiction
+
+theorem Int.mul_eq_zero' {a b : Int} : a * b = 0 ↔ a = 0 ∨' b = 0 := by
+  constructor
+  · intro h h'
+    exact absurd h (Int.mul_ne_zero' h'.1 h'.2)
+  · intro h
+    refine h.elim (fun h => ?_) (fun h => ?_)
+    · rw [h, Int.zero_mul']
+    · rw [h, Int.mul_zero]
+
+theorem Int.neg_mul' (x y : Int) : (-x) * y = -(x * y) := by
+  rw [Int.mul_comm', Int.mul_neg', Int.mul_comm']
 
 structure Rat where
   num : Int
@@ -242,6 +281,137 @@ instance : Eqv Rat where
     dsimp at h h' ⊢
     refine Int.mul_right_cancel' y.ofNat_den_ne_zero ?_
     rw [Int.mul_right_comm', h, Int.mul_right_comm', h', Int.mul_right_comm']
+
+theorem Rat.eqv_def (x y : Rat) : x ~= y ↔ x.num * y.den = y.num * x.den := Iff.rfl
+
+def Rat.ofNat (n : Nat) : Rat := ⟨n, 1, Nat.noConfusion⟩
+
+instance : OfNat Rat n := ⟨Rat.ofNat n⟩
+
+protected def Rat.mul : Rat → Rat → Rat
+  | ⟨a, b, h1⟩, ⟨c, d, h2⟩ => ⟨a * c, b * d, Nat.mul_ne_zero' h1 h2⟩
+
+@[ccongr]
+theorem Rat.mul_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+    x₁.mul y₁ ~= x₂.mul y₂ := by
+  cnsimp [Rat.eqv_def] at *
+  unfold Rat.mul
+  dsimp
+  rw [Int.ofNat_mul, Int.ofNat_mul, ← Int.mul_assoc', ← Int.mul_assoc']
+  rw [Int.mul_right_comm' _ y₁.num, hx, Int.mul_assoc', hy, ← Int.mul_assoc']
+  rw [Int.mul_right_comm' _ x₁.den]
+
+def Rat.divInt : Int → Int → Rat
+  | a, (b + 1 : Nat) => ⟨a, b + 1, Nat.noConfusion⟩
+  | _, 0 => 0
+  | a, .negSucc b => ⟨-a, b + 1, Nat.noConfusion⟩
+
+protected def Rat.neg : Rat → Rat
+  | ⟨a, b, h⟩ => ⟨-a, b, h⟩
+
+@[ccongr]
+theorem Rat.neg_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.neg ~= x₂.neg := by
+  cnsimp [eqv_def] at hx ⊢
+  dsimp [Rat.neg]
+  rw [Int.neg_mul', hx, Int.neg_mul']
+
+@[cnsimp]
+theorem Rat.neg_neg (x : Rat) : x.neg.neg ~= x := by
+  dsimp [Rat.neg]
+  rw [Int.neg_neg]
+
+theorem Rat.divInt_zero_eq (x : Int) : divInt x 0 = 0 := rfl
+
+@[cnsimp]
+theorem Rat.divInt_zero (x : Int) : divInt x 0 ~= 0 := by rfl
+
+theorem Rat.neg_divInt_eq (x y : Int) : divInt (-x) y = (divInt x y).neg := by
+  unfold divInt
+  rcases y with ((_ | y) | y) <;> rfl
+
+theorem Rat.neg_divInt (x y : Int) : divInt (-x) y ~= (divInt x y).neg := by
+  rw [Rat.neg_divInt_eq]
+
+theorem Rat.divInt_neg_eq (x y : Int) : divInt x (-y) = (divInt x y).neg := by
+  unfold divInt
+  rcases y with ((_ | y) | y)
+  · rfl
+  · rfl
+  · rw [Int.neg_negSucc]
+    dsimp [Rat.neg]
+    rw [Int.neg_neg]
+
+theorem Rat.divInt_neg (x y : Int) : divInt x (-y) ~= (divInt x y).neg := by
+  rw [Rat.divInt_neg_eq]
+
+theorem Rat.neg_zero_eq : (0 : Rat).neg = 0 := rfl
+
+@[cnsimp]
+theorem Rat.neg_zero : (0 : Rat).neg ~= 0 := by rfl
+
+theorem Rat.neg_divInt_neg_eq (x y : Int) : divInt (-x) (-y) = divInt x y := by
+  unfold divInt
+  rcases y with ((_ | y) | y)
+  · rfl
+  · dsimp [← Int.negSucc_eq'']
+    rw [Int.neg_neg]
+  · rw [Int.neg_negSucc]
+
+theorem Rat.num_divInt_den_eq (x : Rat) : divInt x.num x.den = x := by
+  unfold divInt
+  rw [← Nat.sub_one_add_one x.den_nz]
+  dsimp
+  conv => lhs; simp only [Nat.sub_one_add_one x.den_nz]
+
+theorem Rat.mul_divInt_mul_right {x y z : Int} (h : z ≠ 0) : divInt (x * z) (y * z) ~= divInt x y := by
+  induction z using Int.negRec with
+  | ofNat z =>
+    induction x using Int.negRec with
+    | ofNat x =>
+      induction y using Int.negRec with
+      | ofNat y =>
+        unfold divInt
+        rw [Int.ofNat_mul_ofNat, Int.ofNat_mul_ofNat]
+        by_cases h' : y = 0
+        · cases h'
+          rw [Nat.zero_mul]
+        · dsimp at h
+          cnsimp [Int.ofNat_eq_zero] at h
+          rw [← Nat.sub_one_add_one (Nat.mul_ne_zero' h' h)]
+          dsimp
+          rw [← Nat.sub_one_add_one h']
+          dsimp
+          cnsimp [eqv_def]
+          dsimp
+          rw [Nat.sub_one_add_one h', Nat.sub_one_add_one (Nat.mul_ne_zero' h' h)]
+          rw [Int.ofNat_mul, Int.ofNat_mul, Int.mul_right_comm', Int.mul_assoc']
+      | neg y ih =>
+        rw [Int.neg_mul', divInt_neg_eq, divInt_neg_eq]
+        cnsimp [ih]
+    | neg x ih =>
+      rw [Int.neg_mul', neg_divInt_eq, neg_divInt_eq]
+      cnsimp [ih]
+  | neg z ih =>
+    rw [Int.mul_neg', Int.mul_neg', neg_divInt_neg_eq]
+    apply ih
+    exact (not_congr Int.neg_eq_zero).mp h
+
+theorem Rat.mul_divInt_mul_left {x y z : Int} (h : x ≠ 0) : divInt (x * y) (x * z) ~= divInt y z := by
+  rw [Int.mul_comm' x, Int.mul_comm' x]
+  exact mul_divInt_mul_right h
+
+protected def Rat.inv : Rat → Rat
+  | ⟨a, b, _⟩ => divInt b a
+
+@[ccongr]
+theorem Rat.inv_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.inv ~= x₂.inv := by
+  dsimp [Rat.inv]
+  cnsimp [eqv_def] at hx
+  refine Eq'.trans (y := divInt (x₁.den * x₂.den) (x₁.num * x₂.den)) ?_ ?_
+  · cnsimp [Rat.mul_divInt_mul_right x₂.ofNat_den_ne_zero]
+  · rw [hx]
+    rw [Int.mul_comm']
+    cnsimp [Rat.mul_divInt_mul_right x₁.ofNat_den_ne_zero]
 
 -- ad = bc
 -- cf = de

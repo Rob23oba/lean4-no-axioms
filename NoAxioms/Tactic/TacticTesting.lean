@@ -87,7 +87,12 @@ partial def rewriteOne (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Meta.Sim
           trace[Meta.Tactic.simp.rewrite] m!"rewrite failed, {e.toMessageData}"
           failed := true
           break
-      newParams := newParams.push (← instantiateMVars m)
+      let m ← instantiateMVars m
+      if m.hasExprMVar then
+        trace[Meta.Tactic.simp.rewrite] m!"rewrite failed, proof has mvar{indentExpr m}"
+        failed := true
+        break
+      newParams := newParams.push m
     if failed then
       continue
     let rhs ← instantiateMVars rhs

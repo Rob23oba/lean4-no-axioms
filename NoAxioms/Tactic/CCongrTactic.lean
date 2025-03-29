@@ -106,7 +106,7 @@ def tryCongrs (goal : MVarId) : MetaM (Option (List MVarId)) := do
     return ← forallCongr goal lhs rhs
   let app := lhs.getAppFn'
   let app' := rhs.getAppFn'
-  unless app.isConst || app'.isConst do
+  unless app.isConst && app'.isConst do
     trace[Meta.Tactic.simp.congr] m!"not consts, {app} {app'}"
     return none -- not supported currently
   unless app.constName! == app'.constName! do

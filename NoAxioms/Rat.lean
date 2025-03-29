@@ -412,10 +412,3 @@ theorem Rat.inv_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.inv ~= x₂.i
   · rw [hx]
     rw [Int.mul_comm']
     cnsimp [Rat.mul_divInt_mul_right x₁.ofNat_den_ne_zero]
-
--- ad = bc
--- cf = de
--- af = be
--- adf = bcf = bde
-
-#print axioms Nat.mul_right_cancel

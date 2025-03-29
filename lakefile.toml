@@ -1,5 +1,6 @@
 name = "no-axioms"
 version = "0.1.0"
+defaultTargets = ["NoAxioms"]
 
 [[lean_lib]]
 name = "NoAxioms"

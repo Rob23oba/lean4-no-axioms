@@ -15,6 +15,20 @@ theorem Nat.add_right_cancel' {a b c : Nat} (h : a + c = b + c) : a = b := by
     change a + (k + 1) - 1 = b + (k + 1) - 1
     rw [h]
 
+theorem Nat.add_right_cancel_iff' {a b c : Nat} : a + c = b + c ↔ a = b := by
+  constructor
+  · exact Nat.add_right_cancel'
+  · rintro rfl
+    rfl
+
+theorem Nat.add_left_cancel' {a b c : Nat} (h : a + b = a + c) : b = c := by
+  rw [Nat.add_comm a, Nat.add_comm a] at h
+  apply Nat.add_right_cancel' h
+
+theorem Nat.add_left_cancel_iff' {a b c : Nat} : a + b = a + c ↔ b = c := by
+  rw [Nat.add_comm a, Nat.add_comm a]
+  apply Nat.add_right_cancel_iff'
+
 theorem Nat.div.go_eq (y : Nat) (hy : 0 < y) (fuel x : Nat) (hfuel : x < fuel) :
     Nat.div.go y hy fuel x hfuel = x / y := by
   induction fuel using Nat.strongRecOn generalizing x with
@@ -53,7 +67,7 @@ theorem Nat.add_sub_add_right' (n k m : Nat) : n + k - (m + k) = n - m := by
   | zero => rfl
   | succ k ih => rw [Nat.add_succ, Nat.add_succ, Nat.succ_sub_succ, ih]
 
-theorem Nat.add_sub_cancel_right' {x y : Nat} : x + y - y = x := by
+theorem Nat.add_sub_cancel_right' (x y : Nat) : x + y - y = x := by
   induction y with
   | zero => rfl
   | succ k ih => rw [Nat.add_succ, Nat.succ_eq_add_one, Nat.add_sub_add_right', ih]
@@ -256,6 +270,257 @@ theorem Int.mul_eq_zero' {a b : Int} : a * b = 0 ↔ a = 0 ∨' b = 0 := by
 
 theorem Int.neg_mul' (x y : Int) : (-x) * y = -(x * y) := by
   rw [Int.mul_comm', Int.mul_neg', Int.mul_comm']
+
+theorem Int.ofNat_add_negOfNat (x y : Nat) : (x : Int) + -y = subNatNat x y := by
+  change Int.add _ _ = _
+  unfold Int.add
+  cases y
+  · dsimp [subNatNat]
+    rw [Nat.zero_sub]
+  · rfl
+
+theorem Int.negOfNat_add_ofNat (x y : Nat) : -(x : Int) + y = subNatNat y x := by
+  change Int.add _ _ = _
+  unfold Int.add
+  cases x
+  · dsimp [subNatNat]
+    rw [Nat.zero_sub, Nat.zero_add]
+  · rfl
+
+theorem Nat.succ_sub' {a b : Nat} (hle : b ≤ a) : a.succ - b = (a - b).succ := by
+  induction b generalizing a with
+  | zero => rfl
+  | succ k ih =>
+    rw [Nat.succ_sub_succ]
+    match a, hle with
+    | .succ a', hle' =>
+      rw [Nat.succ_sub_succ, ih]
+      apply Nat.le_of_succ_le_succ hle'
+
+theorem Nat.sub_add_cancel' {a b : Nat} (hle : b ≤ a) : a - b + b = a := by
+  induction b generalizing a with
+  | zero => rfl
+  | succ k ih =>
+    match a, hle with
+    | .succ a', hle' =>
+      rw [Nat.succ_sub_succ, Nat.add_succ, ih]
+      apply Nat.le_of_succ_le_succ hle'
+
+theorem Nat.eq_add_of_sub_eq' {a b c : Nat} (hle : b ≤ a) (h : a - b = c) : a = c + b := by
+  induction hle generalizing c with
+  | refl =>
+    rw [Nat.sub_self] at h
+    rw [← h, Nat.zero_add]
+  | @step m h' ih =>
+    rw [Nat.succ_sub' h'] at h
+    rw [← h, Nat.succ_add, Nat.sub_add_cancel' h']
+
+theorem Nat.sub_eq_of_eq_add' {a b c : Nat} (h : a = c + b) : a - b = c := by
+  induction b generalizing a c with
+  | zero => exact h
+  | succ k ih =>
+    rw [Nat.add_succ, ← Nat.succ_add] at h
+    rw [Nat.sub_succ, ih h, Nat.pred_succ]
+
+theorem Nat.sub_eq_iff_eq_add'' {a b c : Nat} (hle : b ≤ a) : a - b = c ↔ a = c + b := by
+  constructor
+  · exact Nat.eq_add_of_sub_eq' hle
+  · exact Nat.sub_eq_of_eq_add'
+
+theorem Nat.sub_add_comm' {x y z : Nat} (h : z ≤ x) : x + y - z = x - z + y := by
+  cnsimp [Nat.sub_eq_iff_eq_add'' (Nat.le_add_right_of_le h)]
+  induction h with
+  | refl => rw [Nat.sub_self, Nat.add_comm, Nat.zero_add]
+  | @step m h ih =>
+    rw [Nat.succ_add, ih, Nat.succ_sub' h, Nat.succ_add, Nat.succ_add]
+
+theorem Nat.mul_pred' (x y : Nat) : x * y.pred = x * y - x := by
+  induction y with
+  | zero => rw [Nat.pred_zero, Nat.mul_zero, Nat.zero_sub]
+  | succ k ih =>
+    rw [Nat.pred_succ, Nat.mul_succ, Nat.add_sub_cancel_right']
+
+theorem Nat.sub_sub' (x y z : Nat) : x - y - z = x - (y + z) := by
+  induction z with
+  | zero => rfl
+  | succ k ih =>
+    rw [Nat.sub_succ, Nat.add_succ, Nat.sub_succ, ih]
+
+theorem Nat.mul_sub (x y z : Nat) : x * (y - z) = x * y - x * z := by
+  induction z with
+  | zero => rfl
+  | succ k ih =>
+    rw [Nat.sub_succ, Nat.mul_pred', ih, Nat.mul_succ, Nat.sub_sub']
+
+theorem Nat.sub_add (x y z : Nat) : x - y - z = x - (y + z) := by
+  induction z with
+  | zero => rfl
+  | succ k ih =>
+    rw [Nat.sub_succ, Nat.add_succ, Nat.sub_succ, ih]
+
+theorem Int.ofNat_mul_subNatNat' (x y z : Nat) : x * subNatNat y z = subNatNat (x * y) (x * z) := by
+  unfold subNatNat
+  rw [← Nat.mul_sub, ← Nat.mul_sub]
+  split
+  · rename_i h
+    rw [h, Nat.mul_zero]
+    rfl
+  · rename_i m h
+    rw [h, ofNat_mul_negSucc]
+    rcases x with (_ | x)
+    · rw [Nat.zero_mul, Nat.zero_mul]
+      rfl
+    · rw [Nat.succ_mul_succ]
+      rfl
+
+theorem Int.sub_eq_sub_iff {a b c d : Nat} (h : b ≤ a) (h' : d ≤ c) :
+    a - b = c - d ↔ a + d = b + c := by
+  cnsimp [Nat.sub_eq_iff_eq_add'' h]
+  rw [← Nat.sub_add_comm' h']
+  refine eq_comm.trans ?_
+  cnsimp [Nat.sub_eq_iff_eq_add'' (Nat.le_add_right_of_le h')]
+  rw [Nat.add_comm]
+  exact eq_comm
+
+theorem Int.subNatNat_add_right' (a b : Nat) :
+    subNatNat (a + b) a = b := by
+  unfold subNatNat
+  rw [← Nat.sub_sub', Nat.sub_self, Nat.zero_sub]
+  dsimp
+  rw [Nat.add_comm, Nat.add_sub_cancel_right']
+
+open Int in
+
+theorem Int.subNatNat_add_succ_eq_negSucc (a b : Nat) :
+    subNatNat a (a + b + 1) = -[b+1] := by
+  unfold subNatNat
+  rw [Nat.add_comm a, Nat.add_right_comm, Nat.add_sub_cancel_right']
+
+theorem Int.subNatNat_add_add' (a b c : Nat) :
+    subNatNat (a + c) (b + c) = subNatNat a b := by
+  unfold subNatNat
+  rw [Nat.add_sub_add_right', Nat.add_sub_add_right']
+
+open Int in
+
+@[elab_as_elim]
+theorem Int.subNatNat_ind {motive : Nat → Nat → Int → Prop}
+    (ofNat : ∀ (i n : Nat), motive (n + i) n ↑i)
+    (negSucc : ∀ (i m : Nat), motive m (m + i + 1) -[i+1])
+    (m n : Nat) : motive m n (subNatNat m n) := by
+  by_cases h : n ≤ m
+  · rw [← Nat.sub_add_cancel' h, Nat.add_comm]
+    rw [subNatNat_add_right']
+    apply ofNat
+  · replace h : m + 1 ≤ n := Nat.lt_of_not_le h
+    rw [← Nat.sub_add_cancel' h, Nat.add_comm, Nat.add_right_comm]
+    rw [subNatNat_add_succ_eq_negSucc]
+    apply negSucc
+
+open Int in
+
+theorem Int.subNatNat_eq_iff (a b c d : Nat) :
+    subNatNat a b = subNatNat c d ↔ a + d = b + c := by
+  refine subNatNat_ind (fun i m => ?_) (fun i m => ?_) a b
+  · refine subNatNat_ind (fun i' m' => ?_) (fun i' m' => ?_) c d
+    · rw [Nat.add_right_comm, ← Nat.add_assoc]
+      cnsimp [Nat.add_left_cancel_iff', Int.ofNat_inj]
+    · cnsimp only [show ¬i = -[i'+1] from Int.noConfusion, false_iff_iff]
+      intro h
+      rw [← Nat.add_assoc, ← Nat.add_assoc, Nat.add_right_comm m,
+        ← Nat.add_zero (m + m'), Nat.add_assoc, Nat.add_assoc, Nat.add_assoc] at h
+      cnsimp [Nat.add_left_cancel_iff'] at h
+      exact Nat.noConfusion h
+  · refine subNatNat_ind (fun i' m' => ?_) (fun i' m' => ?_) c d
+    · cnsimp only [show ¬-[i+1] = i' from Int.noConfusion, false_iff_iff]
+      intro h
+      rw [← Nat.add_assoc, Nat.add_right_comm _ 1, Nat.add_right_comm m,
+        Nat.add_assoc, Nat.add_assoc, Nat.add_comm 1] at h
+      conv at h => lhs; rw [← Nat.add_zero (m + m')]
+      cnsimp [Nat.add_left_cancel_iff'] at h
+      exact Nat.noConfusion h
+    · rw [← Nat.add_assoc, ← Nat.add_assoc, Nat.add_right_comm _ 1,
+        Nat.add_right_comm m i, Nat.add_right_comm _ _ 1, Nat.add_right_comm _ i 1]
+      cnsimp [Nat.add_left_cancel_iff', Int.negSucc_inj']
+      exact eq_comm
+
+open Int in
+
+theorem Int.subNatNat_add_negSucc' (x y z : Nat) :
+    subNatNat x y + -[z+1] = subNatNat x (y + (z + 1)) := by
+  refine subNatNat_ind ?_ ?_ x y
+  · intro i n
+    rw [Nat.add_comm n, Nat.add_comm n, subNatNat_add_add']
+    rw [ofNat_add_negSucc]
+  · intro i m
+    rw [Nat.add_assoc, Nat.add_assoc, Nat.add_succ, Nat.add_succ,
+      Nat.add_succ, subNatNat_add_succ_eq_negSucc, Nat.add_comm 1]
+    rw [negSucc_add_negSucc]
+    rfl
+
+theorem Int.subNatNat_add_ofNat (x y z : Nat) :
+    subNatNat x y + z = subNatNat (x + z) y := by
+  refine subNatNat_ind ?_ ?_ x y
+  · intro i n
+    rw [Nat.add_assoc, subNatNat_add_right', ofNat_add]
+  · intro i m
+    rw [negSucc_add_ofNat, Nat.add_assoc,
+      Nat.add_comm m, Nat.add_comm m, subNatNat_add_add']
+
+open Int in
+
+theorem Int.negSucc_add_subNatNat (x y z : Nat) :
+    -[x+1] + subNatNat y z = subNatNat y (x + z + 1) := by
+  rw [Int.add_comm', subNatNat_add_negSucc', Nat.add_left_comm]
+  rfl
+
+theorem Int.ofNat_add_subNatNat (x y z : Nat) :
+    x + subNatNat y z = subNatNat (x + y) z := by
+  rw [Int.add_comm', subNatNat_add_ofNat, Nat.add_comm]
+
+theorem Int.add_assoc' (a b c : Int) : a + b + c = a + (b + c) := by
+  rcases a with (a | a)
+  <;> rcases b with (b | b)
+  <;> rcases c with (c | c)
+  all_goals simp only [ofNat_add_ofNat, ofNat_add_negSucc,
+    negSucc_add_ofNat, negSucc_add_negSucc, ofNat_eq_coe,
+    Int.subNatNat_add_negSucc', Int.subNatNat_add_ofNat,
+    Int.negSucc_add_subNatNat, Int.ofNat_add_subNatNat,
+    Nat.add_assoc, Nat.succ_add, Nat.add_succ, Nat.add_zero,
+    -eq_self]
+  all_goals rfl
+
+theorem Int.add_neg_cancel (x : Int) : x + -x = 0 := Int.sub_self' x
+
+theorem Int.zero_add' (x : Int) : 0 + x = x := by
+  rw [Int.add_comm', Int.add_zero]
+
+theorem Int.neg_add' (x y : Int) : -(x + y) = -x + -y := by
+  calc
+    _ = -(x + y) + x + -x := by rw [Int.add_assoc', Int.add_neg_cancel, Int.add_zero]
+    _ = -(x + y) + x + (y + -y) + -x := by rw [Int.add_neg_cancel, Int.add_zero]
+    _ = -(x + y) + (x + y) + -y + -x := by simp only [Int.add_assoc', -eq_self]; rfl
+    _ = -y + -x := by rw [Int.add_comm' _ (x + y), Int.add_neg_cancel, Int.zero_add']
+    _ = -x + -y := by rw [Int.add_comm']
+
+theorem Int.mul_add' (x y z : Int) : x * (y + z) = x * y + x * z := by
+  induction x using Int.negRec with
+  | ofNat x =>
+    rcases y with (y | y) <;> rcases z with (z | z)
+    · dsimp [Int.ofNat_add_ofNat, Int.ofNat_mul_ofNat]
+      rw [Nat.mul_add]
+    · dsimp [Int.ofNat_add_negSucc, Int.ofNat_mul_negSucc, Int.ofNat_mul_ofNat]
+      rw [Int.ofNat_add_negOfNat, Int.ofNat_mul_subNatNat']
+    · dsimp [Int.negSucc_add_ofNat, Int.ofNat_mul_negSucc, Int.ofNat_mul_ofNat]
+      rw [Int.negOfNat_add_ofNat, Int.ofNat_mul_subNatNat']
+    · dsimp [Int.negSucc_add_negSucc, Int.ofNat_mul_negSucc, ← Int.negOfNat_eq']
+      rw [Int.negOfNat_add, ← Nat.mul_add, Nat.succ_add y]
+      rfl
+  | neg x ih =>
+    rw [Int.neg_mul', ih, Int.neg_add', ← Int.neg_mul', ← Int.neg_mul']
+
+theorem Int.add_mul' (x y z : Int) : (x + y) * z = x * z + y * z := by
+  rw [Int.mul_comm', Int.mul_add', Int.mul_comm' z, Int.mul_comm' z]
 
 structure Rat where
   num : Int
@@ -567,3 +832,73 @@ theorem Rat.inv_mul (x y : Rat) : (x * y)⁻¹ ~= y⁻¹ * x⁻¹ := by
     _ ~= (x * y)⁻¹ * x * (y * y⁻¹) * x⁻¹ := by cnsimp [Rat.mul_inv_cancel hy]
     _ ~= (x * y)⁻¹ * (x * y) * y⁻¹ * x⁻¹ := by cnsimp [Rat.mul_assoc]
     _ ~= y⁻¹ * x⁻¹ := by cnsimp [Rat.inv_mul_cancel (Rat.mul_ne_zero hx hy)]
+
+protected def Rat.add : Rat → Rat → Rat
+  | ⟨a, b, h⟩, ⟨c, d, h'⟩ => ⟨a * d + b * c, b * d, Nat.mul_ne_zero' h h'⟩
+
+instance : Add Rat := ⟨Rat.add⟩
+
+@[ccongr]
+theorem Rat.add_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+    x₁ + y₁ ~= x₂ + y₂ := by
+  dsimp [· + ·, Add.add]
+  unfold Rat.add
+  dsimp
+  cnsimp [eqv_def] at *
+  dsimp
+  rw [Int.add_mul', Int.add_mul']
+  dsimp [Int.ofNat_mul]
+  simp only [← Int.mul_assoc']
+  rw [Int.mul_right_comm' x₁.num, hx]
+  rw [Int.mul_right_comm' _ _ y₂.den, Int.mul_right_comm' x₂.num]
+  rw [Int.mul_comm' x₁.den, Int.mul_right_comm' _ _ y₂.den]
+  rw [Int.mul_right_comm' _ _ y₂.den, hy, Int.mul_right_comm' _ _ x₂.den]
+  rw [Int.mul_right_comm' _ _ x₂.den, Int.mul_right_comm' _ y₁.den x₁.den]
+  rw [Int.mul_comm' y₂.num]
+
+@[cnsimp]
+theorem Rat.add_neg_cancel (x : Rat) : x + -x ~= 0 := by
+  change x.add x.neg ~= 0
+  unfold Rat.add Rat.neg
+  dsimp
+  rw [Int.mul_comm' x.den, Int.neg_mul', Int.add_neg_cancel]
+  cnsimp [eq'_zero_iff_num_eq_zero]
+  rfl
+
+theorem Rat.add_comm (x y : Rat) : x + y ~= y + x := by
+  change x.add y ~= y.add x
+  unfold Rat.add
+  apply eqv_of_den_num_eq
+  dsimp
+  rw [Int.add_comm', Int.mul_comm', Int.mul_comm' x.num, Nat.mul_comm x.den]
+  exact ⟨rfl, rfl⟩
+
+theorem Rat.add_assoc (x y z : Rat) : x + y + z ~= x + (y + z) := by
+  change (x.add y).add z ~= x.add (y.add z)
+  unfold Rat.add
+  apply eqv_of_den_num_eq
+  dsimp
+  rw [Int.mul_add', Int.add_mul', Int.mul_assoc', Int.mul_assoc',
+    Int.ofNat_mul, Int.mul_assoc', Int.add_assoc', Nat.mul_assoc']
+  exact ⟨rfl, rfl⟩
+
+theorem Rat.add_mul (x y z : Rat) : (x + y) * z ~= x * z + y * z := by
+  change (x.add y).mul z ~= (x.mul z).add (y.mul z)
+  cnsimp [eqv_def]
+  unfold Rat.add Rat.mul
+  dsimp [Int.ofNat_mul]
+  rw [Int.add_mul', Int.add_mul', Int.add_mul']
+  simp only [← Int.mul_assoc']
+  rw [Int.mul_right_comm' x.num]
+  rw [Int.mul_right_comm' _ x.den]
+  rw [Int.mul_right_comm' x.den z.den y.num]
+  rw [Int.mul_right_comm' _ z.den z.num]
+  conv => rhs; rhs; rw [Int.mul_right_comm' _ z.den x.den]
+
+theorem Rat.add_zero (x : Rat) : x + 0 ~= x := by
+  change x.add 0 ~= x
+  unfold Rat.add
+  apply eqv_of_den_num_eq
+  dsimp [ofNat]
+  rw [Int.mul_one', Int.mul_zero, Int.add_zero, Nat.mul_one]
+  exact ⟨rfl, rfl⟩

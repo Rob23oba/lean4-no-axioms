@@ -203,6 +203,14 @@ theorem iff_true_iff : (p ↔ True) ↔ p :=
 theorem iff_false_iff : (p ↔ False) ↔ ¬p :=
   ⟨fun h => h.1, iff_false_intro⟩
 
+@[cnsimp]
+theorem true_iff_iff : (True ↔ p) ↔ p :=
+  iff_comm.trans iff_true_iff
+
+@[cnsimp]
+theorem false_iff_iff : (False ↔ p) ↔ ¬p :=
+  iff_comm.trans iff_false_iff
+
 attribute [cnsimp] not_false_iff
 attribute [cnsimp] and_not_self_iff
 attribute [cnsimp] not_and_self_iff

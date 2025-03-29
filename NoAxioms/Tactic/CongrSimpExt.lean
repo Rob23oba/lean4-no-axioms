@@ -362,12 +362,13 @@ where
     return [(e, type)]
 
 def mkSimpTheoremCore (e lhs : Expr) (origin : Origin) (post : Bool := true) : MetaM SimpTheorem := do
+  let keys ← DiscrTree.mkPath lhs
   return {
     post := post
     proof := e
     origin := origin
     rfl := false
-    keys := ← DiscrTree.mkPath lhs
+    keys := keys
   }
 
 def mkSimpTheoremConst (c : Name) (post : Bool := true) (inv : Bool := false) : MetaM (List SimpTheorem) := withReducible do
@@ -376,7 +377,10 @@ def mkSimpTheoremConst (c : Name) (post : Bool := true) (inv : Bool := false) : 
   if inv then
     let proof : Expr := .const c (val.levelParams.map Level.param)
     let origin := .decl c post inv
-    (← preprocess proof type true).mapM (fun (proof, lhs) => mkSimpTheoremCore proof lhs origin post)
+    (← preprocess proof type true).mapM (fun (proof, type) => do
+      let (_, _, e) ← forallMetaTelescopeReducing type
+      let mkApp2 _ lhs _ := e | throwError "must be relation blah"
+      mkSimpTheoremCore proof lhs origin post)
   else
     let (_, _, e) ← forallMetaTelescopeReducing type
     let mkApp2 _ lhs _ := e | throwError "must be relation blah"

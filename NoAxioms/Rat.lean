@@ -873,6 +873,10 @@ theorem Rat.add_comm (x y : Rat) : x + y ~= y + x := by
   rw [Int.add_comm', Int.mul_comm', Int.mul_comm' x.num, Nat.mul_comm x.den]
   exact ⟨rfl, rfl⟩
 
+@[cnsimp]
+theorem Rat.neg_add_cancel (x : Rat) : -x + x ~= 0 := by
+  cnsimp [Rat.add_comm (-x)]
+
 theorem Rat.add_assoc (x y z : Rat) : x + y + z ~= x + (y + z) := by
   change (x.add y).add z ~= x.add (y.add z)
   unfold Rat.add
@@ -895,6 +899,10 @@ theorem Rat.add_mul (x y z : Rat) : (x + y) * z ~= x * z + y * z := by
   rw [Int.mul_right_comm' _ z.den z.num]
   conv => rhs; rhs; rw [Int.mul_right_comm' _ z.den x.den]
 
+theorem Rat.mul_add (x y z : Rat) : x * (y + z) ~= x * y + x * z := by
+  cnsimp [Rat.mul_comm x, Rat.add_mul]
+
+@[cnsimp]
 theorem Rat.add_zero (x : Rat) : x + 0 ~= x := by
   change x.add 0 ~= x
   unfold Rat.add
@@ -902,3 +910,35 @@ theorem Rat.add_zero (x : Rat) : x + 0 ~= x := by
   dsimp [ofNat]
   rw [Int.mul_one', Int.mul_zero, Int.add_zero, Nat.mul_one]
   exact ⟨rfl, rfl⟩
+
+@[cnsimp]
+theorem Rat.zero_add (x : Rat) : 0 + x ~= x := by
+  cnsimp [Rat.add_comm 0]
+
+theorem Rat.add_right_cancel {x y z : Rat} (h : x + z ~= y + z) : x ~= y := by
+  calc
+    x ~= x + z + -z := by cnsimp [Rat.add_assoc]
+    _ ~= y + z + -z := by cnsimp [h]
+    _ ~= y := by cnsimp [Rat.add_assoc]
+
+theorem Rat.add_left_cancel {x y z : Rat} (h : x + y ~= x + z) : y ~= z := by
+  cnsimp only [Rat.add_comm x] at h
+  exact Rat.add_right_cancel h
+
+@[cnsimp]
+theorem Rat.add_right_cancel_iff {x y z : Rat} : x + z ~= y + z ↔ x ~= y := by
+  constructor
+  · exact Rat.add_right_cancel
+  · intro h
+    cnsimp [h]
+
+@[cnsimp]
+theorem Rat.add_left_cancel_iff {x y z : Rat} : x + y ~= x + z ↔ y ~= z := by
+  cnsimp [Rat.add_comm x]
+
+theorem Rat.neg_add (x y : Rat) : -(x + y) ~= -y + -x := by
+  calc
+    _ ~= -(x + y) + x + -x := by cnsimp [Rat.add_assoc]
+    _ ~= -(x + y) + x + (y + -y) + -x := by cnsimp
+    _ ~= -(x + y) + (x + y) + -y + -x := by cnsimp only [← Rat.add_assoc, eq'_self_iff]
+    _ ~= -y + -x := by cnsimp

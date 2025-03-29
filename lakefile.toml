@@ -4,7 +4,3 @@ defaultTargets = ["no-axioms"]
 
 [[lean_lib]]
 name = "NoAxioms"
-
-[[lean_exe]]
-name = "no-axioms"
-root = "Main"

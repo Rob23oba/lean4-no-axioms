@@ -542,3 +542,28 @@ theorem Rat.mul_right_cancel {x y z : Rat} (h : z ~!= 0) (h' : x * z ~= y * z) :
 theorem Rat.mul_left_cancel {x y z : Rat} (h : x ~!= 0) (h' : x * y ~= x * z) : y ~= z := by
   cnsimp only [Rat.mul_comm x] at h'
   exact Rat.mul_right_cancel h h'
+
+theorem Rat.mul_eq_zero {x y : Rat} : x * y ~= 0 ↔ x ~= 0 ∨' y ~= 0 := by
+  constructor
+  · intro h h'
+    apply h'.1
+    calc
+      _ ~= x * y * y⁻¹ := by cnsimp [Rat.mul_assoc, Rat.mul_inv_cancel h'.2]
+      _ ~= 0 := by cnsimp [h]
+  · intro h
+    refine h.elim (fun h' => ?_) (fun h' => ?_) <;> cnsimp [h']
+
+theorem Rat.mul_ne_zero {x y : Rat} (hx : x ~!= 0) (hy : y ~!= 0) : x * y ~!= 0 := by
+  cnsimp only [ne'_iff] at hx hy
+  cnsimp [Rat.mul_eq_zero, hx, hy]
+
+theorem Rat.inv_mul (x y : Rat) : (x * y)⁻¹ ~= y⁻¹ * x⁻¹ := by
+  by_cases' hx : x ~= 0
+  · cnsimp [hx]
+  by_cases' hy : y ~= 0
+  · cnsimp [hy]
+  calc
+    _ ~= (x * y)⁻¹ * x * x⁻¹ := by cnsimp [Rat.mul_assoc, Rat.mul_inv_cancel hx]
+    _ ~= (x * y)⁻¹ * x * (y * y⁻¹) * x⁻¹ := by cnsimp [Rat.mul_inv_cancel hy]
+    _ ~= (x * y)⁻¹ * (x * y) * y⁻¹ * x⁻¹ := by cnsimp [Rat.mul_assoc]
+    _ ~= y⁻¹ * x⁻¹ := by cnsimp [Rat.inv_mul_cancel (Rat.mul_ne_zero hx hy)]

@@ -207,6 +207,11 @@ attribute [cnsimp] not_false_iff
 attribute [cnsimp] and_not_self_iff
 attribute [cnsimp] not_and_self_iff
 
+@[cnsimp]
+theorem not_or' : ¬(p ∨' q) ↔ ¬p ∧ ¬q := by
+  unfold Or'
+  exact not_not
+
 structure Prop' where
   p : Prop
   [dne : DNE p]

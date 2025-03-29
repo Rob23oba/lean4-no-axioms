@@ -236,10 +236,19 @@ def Eq' [Eqv α] (x y : α) : Prop := Eqv.eqv x y
 
 infix:50 " ~= " => Eq'
 
+def Ne' [Eqv α] (x y : α) : Prop := ¬x ~= y
+
+infix:50 " ~!= " => Ne'
+
+@[cnsimp]
+theorem ne'_iff [Eqv α] (x y : α) : x ~!= y ↔ ¬x ~= y := Iff.rfl
+
 theorem Eq'.refl [Eqv α] (x : α) : x ~= x := Eqv.refl x
 @[refl] theorem Eq'.rfl [Eqv α] {x : α} : x ~= x := Eqv.refl x
 theorem Eq'.symm [Eqv α] {x y : α} (h : x ~= y) : y ~= x := Eqv.symm h
 theorem Eq'.trans [Eqv α] {x y z : α} (h₁ : x ~= y) (h₂ : y ~= z) : x ~= z := Eqv.trans h₁ h₂
+
+instance [Eqv α] : @Trans α α α (· ~= ·) (· ~= ·) (· ~= ·) := ⟨Eq'.trans⟩
 
 @[ccongr]
 theorem eq'_congr [Eqv α] {x₁ x₂ y₁ y₂ : α} (h₁ : x₁ ~= x₂) (h₂ : y₁ ~= y₂) : x₁ ~= y₁ ↔ x₂ ~= y₂ := by

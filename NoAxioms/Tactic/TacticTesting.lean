@@ -376,7 +376,7 @@ def CnSimp.mkSimpTheoremCoreOther (origin : Origin) (e : Expr) (levelParams : Ar
     trace[Meta.Tactic.simp] m!"keys: {keys} for type {type}"
     return { origin, keys, post, levelParams, proof, priority := prio, rfl := (← isRflProof proof) }
 
-def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) (post : Bool := true) (inv : Bool := false) : MetaM SimpTheorems := do
+def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) (post : Bool := true) (inv : Bool := false) : MetaM SimpTheorems := withReducible do
   let type ← inferType e
   unless (← isProp type) do
     throwError "invalid 'cnsimp', proposition expected{indentExpr type}"
@@ -390,7 +390,7 @@ def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) 
       return { thms with pre := thms.pre.insertCore thm.keys thm }
   return thms
 
-def CnSimp.addCnSimpLemmas (stx : Syntax) (thms : SimpTheorems) : TacticM SimpTheorems := withReducible do
+def CnSimp.addCnSimpLemmas (stx : Syntax) (thms : SimpTheorems) : TacticM SimpTheorems := do
   if stx.isNone then
     return thms
   else

@@ -540,6 +540,9 @@ theorem Rat.ofNat_den_pos (x : Rat) : 0 < (x.den : Int) := by
     rw [Int.sub_eq_add_neg, Int.add_assoc', Int.add_neg_cancel, Int.add_zero]
     exact ⟨y⟩
 
+theorem Rat.ofNat_den_nonneg (x : Rat) : 0 ≤ (x.den : Int) :=
+  Int.ofNat_nonneg x.den
+
 instance : Eqv Rat where
   eqv x y := x.num * y.den = y.num * x.den
   refl x := rfl
@@ -1047,13 +1050,24 @@ theorem Rat.sub_div (x y z : Rat) : (x - y) / z ~= x / z - y / z := by
 def Rat.le : Rat → Rat → Prop
   | ⟨a, b, _⟩, ⟨c, d, _⟩ => a * d ≤ c * b
 
+def Rat.lt : Rat → Rat → Prop
+  | ⟨a, b, _⟩, ⟨c, d, _⟩ => a * d < c * b
+
 instance : LE Rat where
   le := Rat.le
+
+instance : LT Rat where
+  lt := Rat.lt
 
 instance (x y : Rat) : Decidable (x ≤ y) := inferInstanceAs (Decidable ((_ : Int) ≤ _))
 instance (x y : Rat) : DNE (x ≤ y) := inferInstanceAs (DNE ((_ : Int) ≤ _))
 
+instance (x y : Rat) : Decidable (x < y) := inferInstanceAs (Decidable ((_ : Int) < _))
+instance (x y : Rat) : DNE (x < y) := inferInstanceAs (DNE ((_ : Int) < _))
+
 theorem Rat.le_def {x y : Rat} : x ≤ y ↔ x.num * y.den ≤ y.num * x.den := Iff.rfl
+
+theorem Rat.lt_def {x y : Rat} : x < y ↔ x.num * y.den < y.num * x.den := Iff.rfl
 
 theorem Int.le_iff_exists {x y : Int} : x ≤ y ↔ ∃ z : Nat, x + z = y := by
   constructor
@@ -1145,6 +1159,11 @@ theorem Int.NonNeg.tdiv {a b : Int} : a.NonNeg → b.NonNeg → (a.tdiv b).NonNe
 theorem Int.NonNeg.add {a b : Int} : a.NonNeg → b.NonNeg → (a + b).NonNeg
   | ⟨a⟩, ⟨b⟩ => ⟨a + b⟩
 
+theorem Int.mul_nonneg' {a b : Int} (h : 0 ≤ a) (h' : 0 ≤ b) : 0 ≤ a * b := by
+  cnsimp [Int.le_def] at *
+  rw [Int.sub_zero'] at *
+  exact h.mul h'
+
 theorem Int.mul_le_mul_of_nonneg_right' {x y z : Int} (hz : 0 ≤ z) (h : x ≤ y) : x * z ≤ y * z := by
   cnsimp [Int.le_def] at *
   rw [Int.sub_zero'] at hz
@@ -1202,6 +1221,17 @@ theorem Rat.le_trans {x y z : Rat} (h : x ≤ y) (h' : y ≤ z) : x ≤ z := by
   rw [Int.mul_right_comm']
   exact Int.le_refl' _
 
+theorem Rat.le_of_eq' {x y : Rat} (h : x ~= y) : x ≤ y := by
+  cnsimp only [Rat.le_def, Rat.eqv_def] at *
+  rw [h]
+  exact Int.le_refl' _
+
+theorem Rat.le_of_le_of_eq' {x y z : Rat} (h : x ≤ y) (h' : y ~= z) : x ≤ z := by
+  exact Rat.le_trans h (Rat.le_of_eq' h')
+
+theorem Rat.le_of_eq'_of_le {x y z : Rat} (h : x ~= y) (h' : y ≤ z) : x ≤ z := by
+  exact Rat.le_trans (Rat.le_of_eq' h) h'
+
 theorem Int.le_of_not_le' {x y : Int} (h : ¬x ≤ y) : y ≤ x := by
   cnsimp only [Int.le_def] at h ⊢
   rw [← Int.neg_sub'] at h
@@ -1213,3 +1243,60 @@ theorem Int.le_of_not_le' {x y : Int} (h : ¬x ≤ y) : y ≤ x := by
 theorem Rat.le_of_not_le {x y : Rat} (h : ¬x ≤ y) : y ≤ x := by
   cnsimp only [Rat.le_def] at *
   exact Int.le_of_not_le' h
+
+@[ccongr]
+theorem Rat.le_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+    x₁ ≤ y₁ ↔ x₂ ≤ y₂ := by
+  constructor
+  · intro h
+    exact le_of_le_of_eq' (le_of_eq'_of_le hx.symm h) hy
+  · intro h
+    exact le_of_le_of_eq' (le_of_eq'_of_le hx h) hy.symm
+
+theorem Int.add_le_add_right' {a b c : Int} (h : a ≤ b) : a + c ≤ b + c := by
+  cnsimp only [Int.le_def, Int.nonneg_def] at h ⊢
+  rcases h with ⟨x, hx⟩
+  exists x
+  rw [Int.sub_eq_add_neg, Int.neg_add', Int.add_comm' (-a), ← Int.add_assoc',
+    Int.add_assoc' b, Int.add_neg_cancel, Int.add_zero]
+  exact hx
+
+theorem Int.add_le_add_left' {a b c : Int} (h : b ≤ c) : a + b ≤ a + c := by
+  rw [Int.add_comm' a, Int.add_comm' a]
+  exact Int.add_le_add_right' h
+
+theorem Rat.add_le_add_right {x y z : Rat} (h : x ≤ y) : x + z ≤ y + z := by
+  cnsimp only [Rat.le_def] at *
+  dsimp only [· + ·, Add.add]
+  dsimp only [Rat.add, Int.ofNat_mul]
+  rw [Int.add_mul', Int.add_mul', ← Int.mul_assoc', ← Int.mul_assoc',
+    ← Int.mul_assoc', ← Int.mul_assoc']
+  rw [Int.mul_right_comm' y.num, Int.mul_right_comm' x.num]
+  rw [← Int.add_mul', ← Int.add_mul']
+  apply Int.mul_le_mul_of_nonneg_right' z.ofNat_den_nonneg
+  rw [Int.mul_right_comm' x.den, Int.mul_comm' x.den, Int.mul_right_comm' y.den]
+  apply Int.add_le_add_right'
+  exact Int.mul_le_mul_of_nonneg_right' z.ofNat_den_nonneg h
+
+instance : @Trans Rat Rat Rat (· ≤ ·) (· ≤ ·) (· ≤ ·) := ⟨Rat.le_trans⟩
+instance : @Trans Rat Rat Rat (· ≤ ·) (· ~= ·) (· ≤ ·) := ⟨Rat.le_of_le_of_eq'⟩
+instance : @Trans Rat Rat Rat (· ~= ·) (· ≤ ·) (· ≤ ·) := ⟨Rat.le_of_eq'_of_le⟩
+
+@[cnsimp]
+theorem Rat.add_le_add_iff_right {x y z : Rat} : x + z ≤ y + z ↔ x ≤ y := by
+  constructor
+  · intro h
+    calc
+      x ~= x + z + -z := by cnsimp [Rat.add_assoc]
+      _ ≤ y + z + -z := Rat.add_le_add_right h
+      _ ~= y := by cnsimp [Rat.add_assoc]
+  · exact Rat.add_le_add_right
+
+theorem Rat.add_le_add_left {x y z : Rat} (h : y ≤ z) : x + y ≤ x + z := by
+  cnsimp only [Rat.add_comm x]
+  exact Rat.add_le_add_right h
+
+@[cnsimp]
+theorem Rat.add_le_add_iff_left {x y z : Rat} : x + y ≤ x + z ↔ y ≤ z := by
+  cnsimp only [Rat.add_comm x]
+  exact Rat.add_le_add_iff_right

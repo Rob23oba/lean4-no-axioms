@@ -1300,3 +1300,86 @@ theorem Rat.add_le_add_left {x y z : Rat} (h : y ≤ z) : x + y ≤ x + z := by
 theorem Rat.add_le_add_iff_left {x y z : Rat} : x + y ≤ x + z ↔ y ≤ z := by
   cnsimp only [Rat.add_comm x]
   exact Rat.add_le_add_iff_right
+
+theorem Rat.add_le_add {a b c d : Rat} (h : a ≤ c) (h' : b ≤ d) : a + b ≤ c + d := by
+  calc
+    a + b ≤ c + b := Rat.add_le_add_right h
+    c + b ≤ c + d := Rat.add_le_add_left h'
+
+theorem Int.not_le' {x y : Int} : ¬x ≤ y ↔ y < x := by
+  cnsimp [Int.le_def, Int.lt_iff_add_one_le]
+  rw [Int.sub_eq_add_neg (a := x), Int.neg_add', ← Int.add_assoc',
+    ← Int.sub_eq_add_neg (a := x), ← Int.neg_sub' (x := y)]
+  match y - x with
+  | .ofNat z =>
+    rw [← Int.neg_add']
+    cnsimp [NonNeg.mk z]
+    nofun
+  | .negSucc z =>
+    rw [Int.neg_negSucc, Int.ofNat_succ, Int.add_assoc', Int.add_neg_cancel, Int.add_zero]
+    cnsimp [show (z : Int).NonNeg from ⟨z⟩]
+    nofun
+
+@[cnsimp]
+theorem Rat.not_le {x y : Rat} : ¬x ≤ y ↔ y < x := by
+  cnsimp [Rat.le_def, Rat.lt_def]
+  exact Int.not_le'
+
+@[cnsimp]
+theorem Rat.not_lt {x y : Rat} : ¬x < y ↔ y ≤ x := by
+  cnsimp only [← Rat.not_le, not_not, iff_self_iff_true]
+
+theorem Rat.lt_irrefl (x : Rat) : ¬x < x := by
+  cnsimp only [Rat.not_lt]
+  exact Rat.le_refl x
+
+theorem Rat.le_of_lt {x y : Rat} (h : x < y) : x ≤ y := by
+  cnsimp only [← Rat.not_le] at h
+  exact Rat.le_of_not_le h
+
+theorem Rat.lt_of_le_of_lt {x y z : Rat} (h : x ≤ y) (h' : y < z) : x < z := by
+  cnsimp only [← Rat.not_le] at h' ⊢
+  intro h''
+  apply h'
+  exact Rat.le_trans h'' h
+
+theorem Rat.lt_of_lt_of_le {x y z : Rat} (h : x < y) (h' : y ≤ z) : x < z := by
+  cnsimp only [← Rat.not_le] at h ⊢
+  intro h''
+  apply h
+  exact Rat.le_trans h' h''
+
+theorem Rat.lt_of_eq'_of_lt {x y z : Rat} (h : x ~= y) (h' : y < z) : x < z := by
+  exact Rat.lt_of_le_of_lt (Rat.le_of_eq' h) h'
+
+theorem Rat.lt_of_lt_of_eq' {x y z : Rat} (h : x < y) (h' : y ~= z) : x < z := by
+  exact Rat.lt_of_lt_of_le h (Rat.le_of_eq' h')
+
+theorem Rat.lt_trans {x y z : Rat} (h : x < y) (h' : y < z) : x < z := by
+  exact Rat.lt_of_lt_of_le h (Rat.le_of_lt h')
+
+theorem Rat.lt_asymm {x y : Rat} (h : x < y) : ¬y < x := by
+  cnsimp only [Rat.not_lt]
+  exact Rat.le_of_lt h
+
+theorem Rat.add_lt_add_right {x y z : Rat} (h : x < y) : x + z < y + z := by
+  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_right] at h ⊢
+  exact h
+
+@[cnsimp]
+theorem Rat.add_lt_add_iff_right {x y z : Rat} : x + z < y + z ↔ x < y := by
+  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_right, iff_self_iff_true]
+
+theorem Rat.add_lt_add_left {x y z : Rat} (h : y < z) : x + y < x + z := by
+  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_left] at h ⊢
+  exact h
+
+@[cnsimp]
+theorem Rat.add_lt_add_iff_left {x y z : Rat} : x + y < x + z ↔ y < z := by
+  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_left, iff_self_iff_true]
+
+instance : @Trans Rat Rat Rat (· ≤ ·) (· < ·) (· < ·) := ⟨Rat.lt_of_le_of_lt⟩
+instance : @Trans Rat Rat Rat (· < ·) (· ≤ ·) (· < ·) := ⟨Rat.lt_of_lt_of_le⟩
+instance : @Trans Rat Rat Rat (· < ·) (· < ·) (· < ·) := ⟨Rat.lt_trans⟩
+instance : @Trans Rat Rat Rat (· < ·) (· ~= ·) (· < ·) := ⟨Rat.lt_of_lt_of_eq'⟩
+instance : @Trans Rat Rat Rat (· ~= ·) (· < ·) (· < ·) := ⟨Rat.lt_of_eq'_of_lt⟩

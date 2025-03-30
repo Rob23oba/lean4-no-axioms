@@ -253,6 +253,9 @@ def Ne' [Eqv α] (x y : α) : Prop := ¬x ~= y
 
 infix:50 " ~!= " => Ne'
 
+instance [Eqv α] (x y : α) [Decidable (x ~= y)] : Decidable (x ~!= y) :=
+  if h : x ~= y then .isFalse (fun h' => h' h) else .isTrue h
+
 @[cnsimp]
 theorem ne'_iff [Eqv α] (x y : α) : x ~!= y ↔ ¬x ~= y := Iff.rfl
 

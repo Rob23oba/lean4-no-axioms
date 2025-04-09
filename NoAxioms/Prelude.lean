@@ -264,6 +264,8 @@ theorem Eq'.refl [Eqv α] (x : α) : x ~= x := Eqv.refl x
 theorem Eq'.symm [Eqv α] {x y : α} (h : x ~= y) : y ~= x := Eqv.symm h
 theorem Eq'.trans [Eqv α] {x y z : α} (h₁ : x ~= y) (h₂ : y ~= z) : x ~= z := Eqv.trans h₁ h₂
 
+theorem Ne'.symm [Eqv α] {x y : α} (h : x ~!= y) : y ~!= x := mt Eq'.symm h
+
 instance [Eqv α] : @Trans α α α (· ~= ·) (· ~= ·) (· ~= ·) := ⟨Eq'.trans⟩
 
 @[ccongr]

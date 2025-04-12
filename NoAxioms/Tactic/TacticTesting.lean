@@ -473,14 +473,15 @@ def elabCnSimp : Tactic := fun stx => do
   let mut theorems : SimpTheorems := {}
   if only.isNone then
     theorems ← cnsimpExt.getTheorems
-  theorems ← CnSimp.addCnSimpLemmas stx[4] theorems
   withMainContext <| withLocation (expandOptLocation stx[5])
     (atLocal := fun f => do
+      let theorems ← CnSimp.addCnSimpLemmas stx[4] theorems
       let goalType ← instantiateMVars (← f.getType)
       let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems
       let some step := step | throwError "cnsimp made no progress"
       applyCnSimpIffResultLocal goalType f step)
     (atTarget := do
+      let theorems ← CnSimp.addCnSimpLemmas stx[4] theorems
       let goal ← getMainGoal
       let goalType ← instantiateMVars (← goal.getType)
       let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems

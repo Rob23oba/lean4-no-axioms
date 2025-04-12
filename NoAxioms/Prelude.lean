@@ -211,6 +211,10 @@ theorem true_iff_iff : (True ↔ p) ↔ p :=
 theorem false_iff_iff : (False ↔ p) ↔ ¬p :=
   iff_comm.trans iff_false_iff
 
+attribute [cnsimp] true_imp_iff
+attribute [cnsimp] imp_true_iff
+attribute [cnsimp] false_imp_iff
+attribute [cnsimp] imp_false
 attribute [cnsimp] not_false_iff
 attribute [cnsimp] and_not_self_iff
 attribute [cnsimp] not_and_self_iff
@@ -219,6 +223,10 @@ attribute [cnsimp] not_and_self_iff
 theorem not_or' : ¬(p ∨' q) ↔ ¬p ∧ ¬q := by
   unfold Or'
   exact not_not
+
+theorem not_and_iff_not_or_not [DNE p] [DNE q] : ¬(p ∧ q) ↔ ¬p ∨' ¬q := by
+  unfold Or'
+  cnsimp
 
 structure Prop' where
   p : Prop
@@ -293,6 +301,8 @@ theorem Prop'.p_congr {x y : Prop'} (h : x ~= y) : x.p ↔ y.p := h
 
 @[ccongr]
 theorem Prop'.mk_congr {x y : Prop} [DNE x] [DNE y] (h : x ↔ y) : Prop'.mk x ~= Prop'.mk y := h
+
+@[cnsimp] theorem Prop'.mk_p (x : Prop') : Prop'.mk x.p ~= x := Iff.rfl
 
 structure Fun (α : Sort u) (β : Sort v) [Eqv α] [Eqv β] where
   toFn : α → β
@@ -384,6 +394,10 @@ theorem Noncomputable.exists_eq'_mk [Eqv α] (t : Noncomputable α) : ∃' y, t 
 theorem Noncomputable.elim [Eqv α] {p : Prop} [DNE p]
     (t : Noncomputable α) (h : ∀ a, t ~= mk a → p) : p := t.2.elim h
 
+@[elab_as_elim]
+theorem Noncomputable.ind [Eqv α] {motive : Noncomputable α → Prop} [∀ a, DNE (motive a)]
+    (mk : ∀ t a, t ~= mk a → motive t) (t : Noncomputable α) : motive t := t.elim (mk t)
+
 @[ccongr]
 theorem Noncomputable.val_congr [Eqv α] {x₁ x₂ : Noncomputable α} {y₁ y₂ : α}
     (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) : x₁.val y₁ ~= x₂.val y₂ := by
@@ -444,22 +458,32 @@ theorem Noncomputable.ite_neg [Eqv α] {x : Prop} (h : ¬x) {t e : Noncomputable
     ite x t e ~= e := by
   cnsimp [h]
 
+def Noncomputable.test [Eqv α] (x : Noncomputable α) (p : α ~> Prop') : Prop' :=
+  ∀ a, x.1 a → p a
+
+@[ccongr]
+theorem Noncomputable.test_congr [Eqv α] {x₁ x₂ : Noncomputable α} {p₁ p₂ : α ~> Prop'}
+    (hx : x₁ ~= x₂) (hp : p₁ ~= p₂) : x₁.test p₁ ~= x₂.test p₂ := by
+  dsimp only [test]
+  cnsimp only [hx, hp, eq'_self_iff]
+
+@[cnsimp]
+theorem Noncomputable.test_mk [Eqv α] (x : α) (p : α ~> Prop') : (mk x).test p ~= p x := by
+  dsimp only [test, mk]
+  constructor
+  · intro h
+    exact h x .rfl
+  · intro h a ha
+    cnsimp only [ha, h]
+
 def Noncomputable.bind [Eqv α] [Eqv β] (x : Noncomputable α) (f : α ~> Noncomputable β) : Noncomputable β :=
-  ⟨fun y => ∃' z, x.1 z ∧ (f z).1 y, by
-    refine x.elim (fun y hy => ?_)
-    refine (f y).elim (fun z hz => ?_)
-    refine .intro z ?_
-    intro a
+  ⟨fun y => x.test (fun' a => (f a).1 y), by
+    refine x.elim fun y hy => ?_
+    refine (f y).elim fun z hz => ?_
     dsimp
-    cnsimp only [hy, val_mk]
-    constructor
-    · intro h
-      refine h.elim (fun b ⟨hb, hb'⟩ => ?_)
-      cnsimp only [hb, hz, val_mk] at hb'
-      exact hb'
-    · intro h
-      refine .intro y ?_
-      cnsimp [hy, hz, h]⟩
+    cnsimp only [hy, test_mk, Fun.apply_mkFun']
+    refine .intro z ?_
+    cnsimp [hz]⟩
 
 @[ccongr]
 theorem Noncomputable.bind_congr [Eqv α] [Eqv β] {x₁ x₂ : Noncomputable α} {f₁ f₂ : α ~> Noncomputable β}
@@ -469,73 +493,44 @@ theorem Noncomputable.bind_congr [Eqv α] [Eqv β] {x₁ x₂ : Noncomputable α
   dsimp
   ccongr <;> assumption
 
+@[cnsimp]
+theorem Noncomputable.bind_mk [Eqv α] [Eqv β] (x : α) (f : α ~> Noncomputable β) :
+    (mk x).bind f ~= f x := by
+  intro y
+  dsimp only [bind]
+  cnsimp
+
 def Noncomputable.map [Eqv α] [Eqv β] (f : α ~> β) (x : Noncomputable α) : Noncomputable β :=
-  ⟨fun y => ∃' z, x.1 z ∧ y ~= f z, by
-    refine x.2.elim (fun y hy => ?_)
-    refine .intro (f y) ?_
-    intro z
-    dsimp
-    constructor
-    · intro h
-      refine h.elim (fun a ⟨ha, ha'⟩ => ?_)
-      replace ha := (hy a).mp ha
-      cnsimp [← ha, ha']
-    · intro h
-      refine .intro y ?_
-      cnsimp [hy, h]⟩
+  x.bind (fun' y => mk (f y))
 
 @[ccongr]
 theorem Noncomputable.map_congr [Eqv α] [Eqv β] {f₁ f₂ : α ~> β} {x₁ x₂ : Noncomputable α}
-    (hf : f₁ ~= f₂) (hx : x₁ ~= x₂) : map f₁ x₁ ~= map f₂ x₂ :=
-  fun _ => exists'_congr fun z => and_congr (hx z) (eq'_congr .rfl (hf z))
+    (hf : f₁ ~= f₂) (hx : x₁ ~= x₂) : map f₁ x₁ ~= map f₂ x₂ := by
+  dsimp only [map]
+  ccongr <;> assumption
 
 @[cnsimp]
 theorem Noncomputable.map_mk [Eqv α] [Eqv β] (f : α ~> β) (x : α) : map f (mk x) ~= mk (f x) := by
-  unfold map mk
-  intro y
-  dsimp
-  constructor
-  · intro h
-    refine h.elim (fun a ⟨ha, ha'⟩ => ?_)
-    cnsimp [← ha, ha']
-  · intro h
-    refine .intro x ?_
-    cnsimp [h]
+  dsimp only [map]
+  cnsimp
 
-def Noncomputable.liftProp (x : Noncomputable Prop') : Prop' := ∃' p, x.1 p ∧ p
+def Noncomputable.liftProp (x : Noncomputable Prop') : Prop' := x.test .id
 
 @[ccongr]
-theorem Noncomputable.liftProp_congr {x₁ x₂ : Noncomputable Prop'} (h : x₁ ~= x₂) : liftProp x₁ ~= liftProp x₂ :=
-  exists'_congr fun x => and_congr (h x) .rfl
+theorem Noncomputable.liftProp_congr {x₁ x₂ : Noncomputable Prop'} (h : x₁ ~= x₂) : liftProp x₁ ~= liftProp x₂ := by
+  dsimp only [liftProp]
+  ccongr <;> assumption
 
 @[cnsimp]
 theorem Noncomputable.liftProp_mk (x : Prop') : liftProp (mk x) ~= x := by
-  unfold liftProp mk
-  dsimp
-  constructor
-  · intro h
-    refine h.elim (fun a ⟨ha, ha'⟩ => ?_)
-    exact Iff.mp ha ha'
-  · intro h
-    refine .intro x ?_
-    constructor
-    · rfl
-    · exact h
+  dsimp only [liftProp]
+  cnsimp
 
 @[cnsimp]
 theorem Noncomputable.mk_liftProp (x : Noncomputable Prop') : mk (liftProp x) ~= x := by
-  unfold liftProp mk
-  dsimp [Eq', Eqv.eqv]
-  intro y
-  refine x.2.elim (fun z hz => ?_)
-  rcases y with ⟨y⟩
-  rcases z with ⟨z⟩
-  cnsimp only [hz]
-  dsimp [Eq', Eqv.eqv]
-  by_cases' h' : z
-  · have : ∃' x : Prop', x.p := .intro True trivial
-    cnsimp [h', this]
-  · cnsimp [h']
+  refine x.elim fun y hy => ?_
+  dsimp only [liftProp]
+  cnsimp [hy]
 
 example (x : Prop) [DNE x] : x ↔ (¬((False ↔ False) ∧ (x ↔ True)) ↔ False) := by
   cnsimp

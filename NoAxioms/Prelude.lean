@@ -380,6 +380,17 @@ macro "by_cases'" h:ident " : " t:term : tactic =>
 def Noncomputable (α : Sort u) [Eqv α] := { x : α → Prop' // ∃' y, ∀ z, x z ↔ z ~= y }
 def Noncomputable.mk [Eqv α] (x : α) : Noncomputable α := ⟨fun z => z ~= x, .intro x fun _ => .rfl⟩
 
+def Noncomputable.uniqueChoice [Eqv α] (p : α ~> Prop') (h : ∃' x, p x ∧ ∀ y, p y → x ~= y) :
+    Noncomputable α :=
+  ⟨p, by
+    refine h.elim fun x hx => ?_
+    refine .intro x fun y => ?_
+    constructor
+    · intro h'
+      exact (hx.2 y h').symm
+    · intro h'
+      cnsimp [h', hx.1]⟩
+
 @[cnsimp]
 def Noncomputable.val_mk [Eqv α] (x y : α) : (mk x).val y ↔ y ~= x := Iff.rfl
 
@@ -414,6 +425,29 @@ theorem Noncomputable.mk_congr [Eqv α] {x y : α} (h : x ~= y) : mk x ~= mk y :
   unfold mk
   dsimp
   exact eq'_congr .rfl h
+
+@[cnsimp]
+theorem Noncomputable.mk_inj [Eqv α] {x y : α} : mk x ~= mk y ↔ x ~= y := by
+  constructor
+  · intro h
+    dsimp only [mk] at h
+    specialize h x
+    exact h.mp .rfl
+  · exact Noncomputable.mk_congr
+
+def Noncomputable.uniqueChoice' [Eqv α] (p : Noncomputable α ~> Prop') (h : ∃' x, p x ∧ ∀ y, p y → x ~= y) :
+    Noncomputable α :=
+  ⟨fun x => p (mk x), by
+    refine h.elim fun x hx => ?_
+    refine x.elim fun a ha => ?_
+    refine .intro a fun y => ?_
+    dsimp
+    cnsimp [ha] at hx
+    constructor
+    · intro h'
+      exact Noncomputable.mk_inj.mp (hx.2 (mk y) h').symm
+    · intro h'
+      cnsimp [h', hx]⟩
 
 def Noncomputable.ite {α : Sort u} [Eqv α] (p : Prop) (t e : Noncomputable α) : Noncomputable α :=
   ⟨fun x => (p ∧ t.1 x) ∨' (¬p ∧ e.1 x), by

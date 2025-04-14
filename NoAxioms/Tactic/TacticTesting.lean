@@ -154,11 +154,13 @@ partial def rewriting (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Simp.Step
     return .done result
   return .continue (some result)
 
-partial def trySimpleCongr (_rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCongrProcedure) : CnSimpM (Option Meta.Simp.Result) := withReducible do
+partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCongrProcedure) : CnSimpM (Option Meta.Simp.Result) := withReducible do
   let lhsArgs := lhs.getAppArgs'
   if lhsArgs.size != p.arity then
     --trace[Meta.Tactic.simp.congr] m!"tried applying {c.thmName} to {lhs}, arity mismatch: {lhsArgs.size} vs {p.arity}"
     return none
+  let relArgs := rel.getAppArgs'
+  let args := relArgs ++ lhsArgs
   -- first go through parameters for rewrites
   let levels := lhs.getAppFn'.constLevels!
   let mut relSteps := #[]
@@ -166,7 +168,7 @@ partial def trySimpleCongr (_rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCon
   --trace[Meta.Tactic.simp.congr] m!"have params {reprPrec p.params 0}"
   for param in p.params do
     if let .rel rel' n := param then
-      let newRel := (rel'.instantiateRev lhsArgs).instantiateLevelParamsCore
+      let newRel := (rel'.instantiateRev args).instantiateLevelParamsCore
         (fun n => match n with | .num _ n => levels[n]! | _ => none)
       let newLhs := lhsArgs[n]!
       trace[Meta.Tactic.simp.congr] m!"relation param {newRel} {newLhs}"
@@ -174,7 +176,7 @@ partial def trySimpleCongr (_rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCon
       madeProgress := madeProgress || step.isSome
       relSteps := relSteps.push step
   unless madeProgress do
-    trace[Meta.Tactic.simp.congr] m!"no progress for congruence with {c.thmName} in {lhs} {_rel}"
+    trace[Meta.Tactic.simp.congr] m!"no progress for congruence with {c.thmName} in {lhs} {rel}"
     return none
   -- now construct the proof
   let lparams := p.lparamPerm.map (levels[·]!)
@@ -197,6 +199,8 @@ partial def trySimpleCongr (_rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCon
   let mut iparam := 0
   for param in p.params do
     match param with
+    | .relParam i =>
+      proofParams := proofParams.push relArgs[i]!
     | .preParam i | .fixed i =>
       proofParams := proofParams.push lhsArgs[i]!
     | .postParam i .none =>

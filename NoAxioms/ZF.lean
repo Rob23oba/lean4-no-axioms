@@ -189,8 +189,6 @@ theorem ZFSet.ext_iff {x y : ZFSet} : x ~= y ↔ ∀ a, a ∈ x ↔ a ∈ y := b
   constructor
   · intro h
     cnsimp [h]
-    intro h'
-    exact trivial
   · exact ZFSet.ext
 
 def ZFSet.union (x y : ZFSet) :=

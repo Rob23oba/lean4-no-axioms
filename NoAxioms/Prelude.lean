@@ -228,6 +228,48 @@ theorem not_and_iff_not_or_not [DNE p] [DNE q] : ¬(p ∧ q) ↔ ¬p ∨' ¬q :=
   unfold Or'
   cnsimp
 
+theorem or'_iff_not_imp {x y : Prop} [DNE y] : x ∨' y ↔ ¬x → y := by
+  constructor
+  · intro h h'
+    apply DNE.dne
+    intro h''
+    exact h ⟨h', h''⟩
+  · intro h h'
+    exact h'.2 (h h'.1)
+
+@[cnsimp]
+theorem not_forall_iff_exists' {α : Type u} {p : α → Prop} [∀ x, DNE (p x)] : (¬∀ x, p x) ↔ ∃' x, ¬p x := by
+  constructor
+  · intro h h'
+    apply h
+    intro x
+    apply DNE.dne
+    exact h' x
+  · intro h h'
+    exact h fun x a => a (h' x)
+
+@[cnsimp]
+theorem not_exists' {p : α → Prop} : (¬∃' x, p x) ↔ ∀ x, ¬p x := by
+  constructor
+  · intro h x h'
+    apply h
+    exact .intro x h'
+  · intro h h'
+    exact h' h
+
+@[cnsimp]
+theorem not_implies {a b : Prop} [DNE a] : ¬(a → b) ↔ a ∧ ¬b := by
+  constructor
+  · intro h
+    constructor
+    · apply DNE.dne
+      intro h'
+      exact h (fun h'' => (h' h'').elim)
+    · intro h'
+      exact h (fun _ => h')
+  · intro ⟨h, h'⟩ h''
+    exact h' (h'' h)
+
 structure Prop' where
   p : Prop
   [dne : DNE p]
@@ -247,7 +289,7 @@ class Eqv (α : Sort u) where
   symm {x y} (h : eqv x y) : eqv y x
   trans {x y z} (h₁ : eqv x y) (h₂ : eqv y z) : eqv x z
 
-instance [DecidableEq α] : Eqv α where
+instance (priority := low) [DecidableEq α] : Eqv α where
   eqv x y := x = y
   refl _ := rfl
   symm h := h.symm
@@ -809,17 +851,13 @@ instance [Eqv α] [Eqv β] : Eqv (α ⊕' β) where
   | .inl _ => .rfl
   | .inr _ => .rfl
   symm {x y} h :=
-    match x, y with
-    | .inl _, .inl _ => h.symm
-    | .inr _, .inr _ => h.symm
-    | .inl _, .inr _ => h
-    | .inr _, .inl _ => h
+    match x, y, h with
+    | .inl _, .inl _, h => h.symm
+    | .inr _, .inr _, h => h.symm
   trans {x y z} h h' :=
-    match x, y, z with
-    | .inl _, .inl _, .inl _ => h.trans h'
-    | .inr _, .inr _, .inr _ => h.trans h'
-    | .inl _, .inr _, _ => h.elim
-    | .inr _, .inl _, _ => h.elim
+    match x, y, z, h, h' with
+    | .inl _, .inl _, .inl _, h, h' => h.trans h'
+    | .inr _, .inr _, .inr _, h, h' => h.trans h'
 
 @[cnsimp]
 theorem PSum.inl.inj'_iff [Eqv α] [Eqv β] {x₁ x₂ : α} :
@@ -836,3 +874,32 @@ theorem PSum.inl_eq'_inr [Eqv α] [Eqv β] {x₁ : α} {x₂ : β} :
 @[cnsimp]
 theorem PSum.inr_eq'_inl [Eqv α] [Eqv β] {x₁ : β} {x₂ : α} :
     .inr x₁ ~= (.inl x₂ : α ⊕' β) ↔ False := Iff.rfl
+
+instance [Eqv α] : Eqv (Option α) where
+  eqv
+  | none, none => True
+  | some x, some y => x ~= y
+  | _, _ => False
+  refl
+  | none => trivial
+  | some _ => .rfl
+  symm {x y} h :=
+    match x, y, h with
+    | none, none, _ => trivial
+    | some _, some _, h => h.symm
+  trans {x y z} h h' :=
+    match x, y, z, h, h' with
+    | none, none, none, _, _ => trivial
+    | some _, some _, some _, h, h' => h.trans h'
+
+@[cnsimp]
+theorem Option.none_eq'_some [Eqv α] {x : α} :
+    none ~= some x ↔ False := Iff.rfl
+
+@[cnsimp]
+theorem Option.some_eq'_none [Eqv α] {x : α} :
+    some x ~= none ↔ False := Iff.rfl
+
+@[cnsimp]
+theorem Option.some.inj'_iff [Eqv α] {x₁ x₂ : α} :
+    some x₁ ~= some x₂ ↔ x₁ ~= x₂ := Iff.rfl

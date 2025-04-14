@@ -77,6 +77,10 @@ inductive ParameterFillOutProcedure where
   -/
   | fixed (i : Nat)
   /--
+  A parameter of the relation application.
+  -/
+  | relParam (i : Nat)
+  /--
   A parameter that is only present on the lhs.
   -/
   | preParam (i : Nat)
@@ -225,15 +229,21 @@ def mkSimpleCCongrTheorem (declName : Name) (prio : Nat) : MetaM CCongrTheorem :
   let some c := (← getEnv).findConstVal? declName | throwError "unknown constant '{.ofConstName declName}'"
   let (xs, _, type) ← forallMetaTelescopeReducing c.type
   let mkApp2 rel lhs rhs := type | throwError "invalid 'ccongr' theorem, relation application expected{indentExpr type}"
-  let some relName := rel.getAppFn.constName? | throwError "invalid 'ccongr' theorem, relation application expected{indentExpr type}"
 
-  lhs.withApp fun lhsFn lhsArgs => rhs.withApp fun rhsFn rhsArgs => do
+  rel.withApp fun relFn relArgs => lhs.withApp fun lhsFn lhsArgs => rhs.withApp fun rhsFn rhsArgs => do
+    let some relName := relFn.constName? | throwError "invalid 'ccongr' theorem, relation application expected{indentExpr type}"
     unless lhsFn.isConst && rhsFn.isConst && lhsFn.constName! == rhsFn.constName! && lhsArgs.size == rhsArgs.size do
       throwError "invalid 'ccongr' theorem, left/right-hand sides must be applications of the same function{indentExpr type}"
     let (lperm, lfun) ← deriveLevelParamPerm lhsFn c.levelParams
     let mut params := #[]
     let mut mvarIdToPurpose : MVarIdMap ParameterFillOutProcedure := ∅
     let mut i := 0
+    for x in relArgs do
+      unless x.isMVar do
+        continue
+      mvarIdToPurpose := mvarIdToPurpose.insert x.mvarId! (.relParam i)
+      i := i + 1
+    i := 0
     for x in lhsArgs do
       unless x.isMVar do
         throwError "invalid simple 'ccongr', fixed parameters ({x}) are not allowed"
@@ -272,7 +282,7 @@ def mkSimpleCCongrTheorem (declName : Name) (prio : Nat) : MetaM CCongrTheorem :
         mvarIdToPurpose := mvarIdToPurpose.insert rhs.mvarId! (.postParam pos' .none)
         if pos != pos' then
           throwError "invalid simple 'ccongr', mismatch of positions"
-        let rel' := (rel.abstract lhsArgs).instantiateLevelParamsCore lfun
+        let rel' := (rel.abstract (relArgs ++ lhsArgs)).instantiateLevelParamsCore lfun
         params := params.push (.rel rel' pos)
     params := params.mapIdx (fun
       | idx, .postParam _ (.exact (.mvar mvar)) =>

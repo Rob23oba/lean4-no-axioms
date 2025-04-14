@@ -9,7 +9,7 @@ def tryCongrOneSimple (goal : MVarId) (c : CCongrTheorem) (p : SimpleCCongrProce
   trace[Meta.Tactic.simp.congr] m!"try simple congruence {c.thmName} on {goal.name} of type {← goal.getType}"
   let goalType ← goal.getType'
   let goalType := goalType.consumeMData
-  let mkApp2 _ lhs rhs := goalType | unreachable!
+  let mkApp2 rel lhs rhs := goalType | unreachable!
   let lhsArgs := lhs.getAppArgs'
   if lhsArgs.size != p.arity then
     trace[Meta.Tactic.simp.congr] m!"arity mismatch on lhs {lhsArgs.size} and {p.arity}"
@@ -18,23 +18,47 @@ def tryCongrOneSimple (goal : MVarId) (c : CCongrTheorem) (p : SimpleCCongrProce
   if rhsArgs.size != p.arity then
     trace[Meta.Tactic.simp.congr] m!"arity mismatch on rhs {rhsArgs.size} and {p.arity}"
     return none
+  let relArgs := rel.getAppArgs'
+  let args := relArgs ++ lhsArgs
   let levels := lhs.getAppFn'.constLevels!
   let lparams := p.lparamPerm.map (levels[·]!)
-  let mut proof : Expr := .const c.thmName lparams
+  let mut params : Array Expr := #[]
   let mut goals := []
   for param in p.params do
     match param with
+    | .relParam i =>
+      params := params.push relArgs[i]!
     | .preParam i | .fixed i =>
-      proof := .app proof lhsArgs[i]!
-    | .postParam i _ =>
-      proof := .app proof rhsArgs[i]!
+      params := params.push lhsArgs[i]!
+    | .postParam i synth =>
+      if h : i < rhsArgs.size then
+        params := params.push rhsArgs[i]
+      else
+        match synth with
+        | .synth cls =>
+          try
+            let newClass := (cls.instantiateRev params).instantiateLevelParamsCore
+              (fun n => match n with | .num _ n => levels[n]! | _ => none)
+            let inst ← synthInstance newClass
+            params := params.push inst
+          catch e =>
+            trace[Meta.Tactic.simp.congr] m!"discharge failed: {cls}"
+            return none
+        | .exact expr =>
+          let newExpr := (expr.instantiateRev params).instantiateLevelParamsCore
+            (fun n => match n with | .num _ n => levels[n]! | _ => none)
+          params := params.push newExpr
+        | .none =>
+          trace[Meta.Tactic.simp.congr] m!"invalid parameter but no discharger"
+          return none
     | .rel rel' i =>
-      let newRel := (rel'.instantiateRev lhsArgs).instantiateLevelParamsCore
+      let newRel := (rel'.instantiateRev args).instantiateLevelParamsCore
         (fun n => match n with | .num _ n => levels[n]! | _ => none)
       let newGoalType := mkApp2 newRel lhsArgs[i]! rhsArgs[i]!
       let newGoal ← mkFreshExprMVar newGoalType
       goals := newGoal.mvarId! :: goals
-      proof := .app proof newGoal
+      params := params.push newGoal
+  let proof : Expr := mkAppN (Expr.const c.thmName lparams) params
   trace[Meta.Tactic.simp.congr] m!"constructed proof {proof}"
   goal.assign proof
   return some goals
@@ -60,6 +84,14 @@ def tryCongrOne (goal : MVarId) (c : CCongrTheorem) (pos : Array Nat) : MetaM (O
       return (proof, goal.mvarId!)
     goal.assign expr
     goals := newGoal :: goals
+  for x in xs do
+    let mvar := x.mvarId!
+    unless ← mvar.isAssigned do
+      try
+        mvar.inferInstance
+      catch _ =>
+        trace[Meta.Tactic.simp.congr] m!"discharge failed"
+        return none
   let proof : Expr := .const c.thmName levels
   let proof := mkAppN proof xs
   goal.assign proof

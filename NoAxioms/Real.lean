@@ -10,8 +10,40 @@ instance : OfNat Real n := ⟨.mk (.ofRat n)⟩
 theorem Real.mk_congr {x₁ x₂ : PreReal} (hx : x₁ ~= x₂) : mk x₁ ~= mk x₂ :=
   Noncomputable.mk_congr hx
 
+@[cnsimp]
+theorem Real.mk_inj {x₁ x₂ : PreReal} : mk x₁ ~= mk x₂ ↔ x₁ ~= x₂ :=
+  Noncomputable.mk_inj
+
 theorem Real.elim {p : Prop} [DNE p] (t : Real) (h : (a : PreReal) → t ~= mk a → p) : p :=
   Noncomputable.elim t h
+
+def Real.bind (x : Real) (f : PreReal ~> Real) : Real :=
+  Noncomputable.bind x f
+
+@[ccongr]
+theorem Real.bind_congr {x₁ x₂ : Real} {f₁ f₂ : PreReal ~> Real}
+    (hx : x₁ ~= x₂) (hf : f₁ ~= f₂) : x₁.bind f₁ ~= x₂.bind f₂ := by
+  dsimp only [bind]
+  ccongr <;> assumption
+
+@[cnsimp]
+theorem Real.bind_mk (x : PreReal) (f : PreReal ~> Real) : (mk x).bind f ~= f x := by
+  dsimp only [bind, mk]
+  cnsimp
+
+def Real.test (x : Real) (p : PreReal ~> Prop') : Prop' :=
+  Noncomputable.test x p
+
+@[ccongr]
+theorem Real.test_congr {x₁ x₂ : Real} {p₁ p₂ : PreReal ~> Prop'}
+    (hx : x₁ ~= x₂) (hf : p₁ ~= p₂) : x₁.test p₁ ~= x₂.test p₂ := by
+  dsimp only [test]
+  ccongr <;> assumption
+
+@[cnsimp]
+theorem Real.test_mk (x : PreReal) (p : PreReal ~> Prop') : (mk x).test p ~= p x := by
+  dsimp only [test, mk]
+  cnsimp
 
 def Real.uniqueChoice (p : Real ~> Prop') (h : ∃' x, p x ∧ ∀ y, p y → x ~= y) : Real :=
   Noncomputable.uniqueChoice' p h
@@ -22,16 +54,18 @@ instance : Add Real where
     y.bind fun' b =>
       .mk (a.add b)
 
-@[ccongr]
 theorem Real.add_congr {x₁ x₂ y₁ y₂ : Real} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ + y₁ ~= x₂ + y₂ := by
   dsimp [· + ·, Add.add, mk] at *
   ccongr <;> assumption
 
+instance : AddCongr Real where
+  add_congr := Real.add_congr
+
 @[cnsimp]
 theorem Real.mk_add_mk (x y : PreReal) :
     (.mk x : Real) + (.mk y : Real) ~= (.mk (x.add y)) := by
-  dsimp [· + ·, Add.add, mk]
+  dsimp [· + ·, Add.add]
   cnsimp
 
 theorem Real.add_comm (x y : Real) : x + y ~= y + x := by
@@ -58,11 +92,13 @@ theorem Real.zero_add (x : Real) : 0 + x ~= x := by
 instance : Neg Real where
   neg x := x.map fun' a => a.neg
 
-@[ccongr]
 theorem Real.neg_congr {x₁ x₂ : Real} (hx : x₁ ~= x₂) :
     -x₁ ~= -x₂ := by
   dsimp [Neg.neg]
   cnsimp [hx]
+
+instance : NegCongr Real where
+  neg_congr := Real.neg_congr
 
 @[cnsimp]
 theorem Real.neg_mk (x : PreReal) : -mk x ~= mk x.neg := by
@@ -86,11 +122,13 @@ theorem Real.neg_zero : -0 ~= (0 : Real) := by
 instance : Sub Real where
   sub x y := x + -y
 
-@[ccongr]
 theorem Real.sub_congr {x₁ x₂ y₁ y₂ : Real} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ - y₁ ~= x₂ - y₂ := by
   dsimp [· - ·, Sub.sub] at *
   ccongr <;> assumption
+
+instance : SubCongr Real where
+  sub_congr := Real.sub_congr
 
 theorem Real.sub_eq'_add_neg (x y : Real) : x - y ~= x + -y := .rfl
 
@@ -111,23 +149,27 @@ instance : LE Real where
 instance (x y : Real) : DNE (x < y) := inferInstanceAs (DNE (Prop'.p _))
 instance (x y : Real) : DNE (x ≤ y) := inferInstanceAs (DNE (¬ _))
 
-@[ccongr]
 theorem Real.lt_congr {x₁ x₂ y₁ y₂ : Real} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ < y₁ ↔ x₂ < y₂ := by
   dsimp only [· < ·]
   ccongr <;> assumption
 
-@[ccongr]
+instance : LTCongr Real where
+  lt_congr := Real.lt_congr
+
 theorem Real.le_congr {x₁ x₂ y₁ y₂ : Real} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ ≤ y₁ ↔ x₂ ≤ y₂ := by
   dsimp only [· ≤ ·]
   ccongr <;> assumption
 
+instance : LECongr Real where
+  le_congr := Real.le_congr
+
 theorem Real.lt_irrefl (x : Real) : ¬x < x := by
   dsimp only [· < ·]
   cnsimp only [Real.sub_self]
-  change ¬Noncomputable.test (.mk 0) _
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun']
+  change ¬test (.mk 0) _
+  cnsimp only [Real.test_mk, Fun.apply_mkFun']
   exact PreReal.not_zero_pos
 
 theorem Real.lt_trans {x y z : Real} (h : x < y) (h' : y < z) : x < z := by
@@ -136,8 +178,7 @@ theorem Real.lt_trans {x y z : Real} (h : x < y) (h' : y < z) : x < z := by
   refine y.elim fun b hb => ?_
   refine z.elim fun c hc => ?_
   cnsimp only [ha, hb, hc, Real.sub_eq'_add_neg, Real.neg_mk, Real.mk_add_mk] at h h' ⊢
-  dsimp only [mk] at h h' ⊢
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun'] at h h' ⊢
+  cnsimp only [Real.test_mk, Fun.apply_mkFun'] at h h' ⊢
   have := PreReal.add_pos h h'
   cnsimp only [PreReal.add_comm c, ← PreReal.add_assoc] at this
   cnsimp only [PreReal.add_assoc b a.neg, PreReal.add_comm a.neg] at this
@@ -151,8 +192,7 @@ theorem Real.lt_asymm {x y : Real} (h : x < y) : ¬y < x := by
   refine x.elim fun a ha => ?_
   refine y.elim fun b hb => ?_
   cnsimp only [ha, hb, Real.sub_eq'_add_neg, Real.neg_mk, Real.mk_add_mk] at h ⊢
-  dsimp only [mk] at h ⊢
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun'] at h ⊢
+  cnsimp only [Real.test_mk, Fun.apply_mkFun'] at h ⊢
   intro h'
   have := PreReal.add_pos h h'
   cnsimp only [← PreReal.add_assoc] at this
@@ -165,8 +205,7 @@ theorem Real.le_iff_lt_or'_eq' {x y : Real} : x ≤ y ↔ x < y ∨' x ~= y := b
   refine x.elim fun a ha => ?_
   refine y.elim fun b hb => ?_
   cnsimp only [ha, hb, Real.sub_eq'_add_neg, Real.neg_mk, Real.mk_add_mk]
-  dsimp only [mk, Real]
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun', Noncomputable.mk_inj]
+  cnsimp only [Real.test_mk, Fun.apply_mkFun', Real.mk_inj]
   have := PreReal.pos_trichotomy (a.add b.neg)
   have asubbneg : (a.add b.neg).neg ~= b.add a.neg := by
     cnsimp only [PreReal.neg_add, PreReal.neg_neg, eq'_self_iff]
@@ -222,8 +261,7 @@ theorem Real.add_lt_add_right {x y z : Real} (h : x < y) : x + z < y + z := by
   refine y.elim fun b hb => ?_
   refine z.elim fun c hc => ?_
   cnsimp only [ha, hb, hc, Real.sub_eq'_add_neg, Real.neg_mk, Real.mk_add_mk] at h ⊢
-  dsimp only [mk] at h ⊢
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun'] at h ⊢
+  cnsimp only [Real.test_mk, Fun.apply_mkFun'] at h ⊢
   cnsimp only [PreReal.neg_add]
   have : (b.add c).add (c.neg.add a.neg) ~= b.add a.neg := by
     calc
@@ -256,12 +294,12 @@ instance : Mul Real where
 @[ccongr]
 theorem Real.mul_congr {x₁ x₂ y₁ y₂ : Real} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ * y₁ ~= x₂ * y₂ := by
-  dsimp [· * ·, Mul.mul, mk] at *
+  dsimp [· * ·, Mul.mul] at *
   ccongr <;> assumption
 
 @[cnsimp]
 theorem Real.mk_mul_mk (x y : PreReal) : mk x * mk y ~= mk (x.mul y) := by
-  dsimp [· * ·, Mul.mul, mk] at *
+  dsimp [· * ·, Mul.mul] at *
   cnsimp
 
 @[cnsimp]

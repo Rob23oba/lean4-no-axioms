@@ -99,6 +99,7 @@ def tryCongrOneNewSimple (goal : MVarId) (c : CCongrTheorem) (p : NewSimpleCongr
         state := state.set! i expr
       catch _ =>
         trace[Meta.Tactic.simp.congr] m!"discharge failed"
+        return none
     | .exact .. => continue
     | .introMVar i type =>
       let type := (type.instantiate state).instantiateLevelParamsCore lfun

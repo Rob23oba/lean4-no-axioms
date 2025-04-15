@@ -549,10 +549,7 @@ where
         match rules[k]'hi with
         | .assign n => go f (state.set! n a) k (Nat.le_of_lt hi)
         | .take n => do
-          if ← withReducibleAndInstances <| isDefEq state[n]! a then
-            go f (state.set! n a) k (Nat.le_of_lt hi)
-          else
-            throwError "congruence failed"
+          go f (state.set! n a) k (Nat.le_of_lt hi) -- maybe check
         | .ignore => go f state k (Nat.le_of_lt hi)
       | _ => pure state
 

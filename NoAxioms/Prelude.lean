@@ -311,10 +311,10 @@ theorem ne'_iff [Eqv α] (x y : α) : x ~!= y ↔ ¬x ~= y := Iff.rfl
 
 theorem Eq'.refl [Eqv α] (x : α) : x ~= x := Eqv.refl x
 @[refl] theorem Eq'.rfl [Eqv α] {x : α} : x ~= x := Eqv.refl x
-theorem Eq'.symm [Eqv α] {x y : α} (h : x ~= y) : y ~= x := Eqv.symm h
+@[symm] theorem Eq'.symm [Eqv α] {x y : α} (h : x ~= y) : y ~= x := Eqv.symm h
 theorem Eq'.trans [Eqv α] {x y z : α} (h₁ : x ~= y) (h₂ : y ~= z) : x ~= z := Eqv.trans h₁ h₂
 
-theorem Ne'.symm [Eqv α] {x y : α} (h : x ~!= y) : y ~!= x := mt Eq'.symm h
+@[symm] theorem Ne'.symm [Eqv α] {x y : α} (h : x ~!= y) : y ~!= x := mt Eq'.symm h
 
 instance [Eqv α] : @Trans α α α (· ~= ·) (· ~= ·) (· ~= ·) := ⟨Eq'.trans⟩
 
@@ -541,7 +541,7 @@ def Noncomputable.test [Eqv α] (x : Noncomputable α) (p : α ~> Prop') : Prop'
 theorem Noncomputable.test_congr [Eqv α] {x₁ x₂ : Noncomputable α} {p₁ p₂ : α ~> Prop'}
     (hx : x₁ ~= x₂) (hp : p₁ ~= p₂) : x₁.test p₁ ~= x₂.test p₂ := by
   dsimp only [test]
-  cnsimp only [hx, hp, eq'_self_iff]
+  ccongr <;> assumption
 
 @[cnsimp]
 theorem Noncomputable.test_mk [Eqv α] (x : α) (p : α ~> Prop') : (mk x).test p ~= p x := by
@@ -770,12 +770,9 @@ theorem EqvGen'.ind
 /-
 run_meta
   let a := CCongr.ccongrExtension.getState (← Lean.getEnv)
-  let a := a.lemmas.find! { rel := ``Eq', decl := ``Quotient'.lift }
+  let a := a.lemmas.find! { rel := ``Eq', decl := ``Prop'.mk }
   Lean.logInfo m!"{reprPrec a 0}"
 -/
-
---set_option trace.Meta.Tactic.simp true
-
 
 def testing :
     (fun' x : Prop' => (x ↔ True : Prop')) ~= (fun' x => x) := by

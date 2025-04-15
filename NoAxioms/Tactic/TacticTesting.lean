@@ -234,6 +234,61 @@ partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCong
   let proof := mkAppN proof proofParams
   return some { expr := rhs, proof? := proof }
 
+partial def tryNewSimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : NewSimpleCongr) : CnSimpM (Option Meta.Simp.Result) := withReducible do
+  let lhsArgs := lhs.getAppArgs'
+  if lhsArgs.size != p.funArity then
+    return none
+  let state : Array Expr := Array.replicate p.proofArity default
+  let state ← traverseNewTypes rel p.relArgsIterate state
+  let state ← traverseNewTypes lhs p.lhsArgsIterate state
+  trace[Meta.Tactic.simp.congr] m!"state: {state}"
+  let levels := lhs.getAppFn'.constLevels!
+  let some state ← doActions levels false state p.preActions | return none
+  let some state ← doActions levels true state p.postActions | return none
+  let rhs ← constructFromTypes lhs.getAppFn' p.rhsArgsIterate state
+  let lparams := p.lparamsPerm.map (levels[·]!)
+  let proof : Expr := .const c.thmName lparams
+  let proof := mkAppN proof state
+  return some { expr := rhs, proof? := proof }
+where
+  doActions (levels : List Level) (madeProgress : Bool) (state : Array Expr) (acts : Array CongrActionType) : CnSimpM (Option (Array Expr)) := do
+    let lfun (n : Name) : Option Level := match n with | .num _ n => levels[n]! | _ => none
+    let mut state := state
+    let mut madeProgress := madeProgress
+    for act in acts do
+      match act with
+      | .synth _ i type =>
+        let type := (type.instantiate state).instantiateLevelParamsCore lfun
+        try
+          let expr ← synthInstance type
+          state := state.set! i expr
+        catch _ =>
+          trace[Meta.Tactic.simp.congr] m!"discharge for {type} failed"
+          return none
+      | .exact i value =>
+        let value := (value.instantiate state).instantiateLevelParamsCore lfun
+        state := state.set! i value
+      | .introMVar i type =>
+        let type := (type.instantiate state).instantiateLevelParamsCore lfun
+        let mvar ← mkFreshExprMVar type
+        state := state.set! i mvar
+      | .rel i lhs rhs rel =>
+        let rel := (rel.instantiate state).instantiateLevelParamsCore lfun
+        let relName := rel.getAppFn'.constName!
+        let step ← cnsimp rel state[lhs]!
+        match step with
+        | none =>
+          state := state.set! rhs state[lhs]!
+          state := state.set! i (← mkAppM (.str relName "refl") #[state[rhs]!])
+        | some { expr := e, proof? := proof?, cache := _ } =>
+          state := state.set! rhs e
+          state := state.set! i (← proof?.getDM (mkAppM (.str relName "refl") #[state[rhs]!]))
+          madeProgress := true
+    if madeProgress then
+      return some state
+    else
+      return none
+
 partial def tryCongr (rel lhs : Expr) (c : CCongrTheorem) (pos : Array Nat) : CnSimpM (Option Meta.Simp.Result) := withReducible do
   --trace[Meta.Tactic.simp.congr] m!"try congruence {rel} {lhs} {c.thmName}"
   let some const := (← getEnv).findConstVal? c.thmName | return none
@@ -299,6 +354,7 @@ partial def doCongr (rel lhs : Expr) : CnSimpM (Option Meta.Simp.Result) := do
     let step ← match c.procedure with
     | .simpleProcedure p => trySimpleCongr rel lhs c p
     | .expensiveProcedure p => tryCongr rel lhs c p
+    | .newSimpleProcedure p => tryNewSimpleCongr rel lhs c p
     if step.isSome then
       return step
   --trace[Meta.Tactic.simp.congr] m!"no progress made for {rel} and {lhs}"

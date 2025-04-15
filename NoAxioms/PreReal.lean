@@ -541,6 +541,50 @@ def PreReal.mul (x y : PreReal) : PreReal where
     cnsimp only [← Rat.div_eq'_mul_inv] at hi hi'
     exact PreReal.mul_rat_cond hε ha2 hb2 ha1 hb1 hi hi'
 
+theorem PreReal.mul_of_eq'_zero (x y : PreReal) (hy : y ~= 0) : x.mul y ~= 0 := by
+  cnsimp only [eqv_def, seq_ofNat, Noncomputable.test_mk, Fun.apply_mkFun',
+    Rat.zero_sub, Rat.abs_neg] at hy ⊢
+  dsimp only [mul]
+  refine x.exists_gt_abs_seq.elim fun a ha => ?_
+  have apos : 0 < a := by
+      specialize ha 0
+      refine (x.seq 0).elim fun c hc => ?_
+      cnsimp [hc] at ha
+      exact Rat.lt_of_le_of_lt (Rat.abs_nonneg c) ha
+  intro ε hε
+  specialize hy (ε / a) (Rat.div_pos hε apos)
+  refine hy.elim fun i hi => ?_
+  refine .intro i fun j hj => ?_
+  specialize ha j
+  specialize hi j hj
+  refine (x.seq j).elim fun b hb => ?_
+  refine (y.seq j).elim fun c hc => ?_
+  cnsimp only [hb, hc, Noncomputable.test_mk, Noncomputable.bind_mk,
+    Noncomputable.map_mk, Fun.apply_mkFun'] at ha hi ⊢
+  cnsimp only [Rat.abs_mul]
+  calc
+    b.abs * c.abs < a * (ε / a) :=
+      Rat.mul_lt_mul (Rat.abs_nonneg _) (Rat.abs_nonneg _) ha hi
+    _ ~= ε := Rat.mul_div_cancel (Rat.ne_of_gt apos)
+
+theorem PreReal.mul_neg (x y : PreReal) : x.mul y.neg ~= (x.mul y).neg := by
+  apply eqv_of_seq_eq
+  intro i
+  dsimp [PreReal.mul, PreReal.neg]
+  refine (x.seq i).elim fun a ha => ?_
+  refine (y.seq i).elim fun b hb => ?_
+  cnsimp only [ha, hb, Noncomputable.bind_mk, Noncomputable.map_mk, seq_ofNat, Fun.apply_mkFun',
+    Noncomputable.mk_inj, Rat.mul_neg, eq'_self_iff]
+
+theorem PreReal.mul_zero (x : PreReal) : x.mul 0 ~= 0 := by
+  apply eqv_of_seq_eq
+  intro i
+  dsimp [PreReal.mul]
+  refine (x.seq i).elim fun a ha => ?_
+  cnsimp only [ha, Noncomputable.bind_mk, Noncomputable.map_mk, seq_ofNat, Fun.apply_mkFun',
+    Noncomputable.mk_inj]
+  exact Rat.mul_zero a
+
 theorem PreReal.mul_one (x : PreReal) : x.mul 1 ~= x := by
   apply eqv_of_seq_eq
   intro i
@@ -719,7 +763,7 @@ def Nat.choose_of_exists {p : Nat → Prop} [∀ x, DNE (p x)] (h : ∃' x, p x)
         exact hy.2 a h ha
       · exact hy
 
-theorem PreReal.pos_trichomoty (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos := by
+theorem PreReal.pos_trichotomy (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos := by
   dsimp only [pos, neg]
   cnsimp only [eqv_def]
   apply or'_iff_not_imp.mpr
@@ -727,12 +771,161 @@ theorem PreReal.pos_trichomoty (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos 
     Noncomputable.test_mk, Fun.apply_mkFun', Rat.zero_sub, Rat.abs_neg]
   intro h
   refine h.elim fun ε hε => ?_
+  clear h
   obtain ⟨hε, h⟩ := hε
   apply or'_iff_not_imp.mpr
   cnsimp only [not_forall_iff_exists', not_implies, not_exists', not_and]
   intro h'
-  specialize h' ε hε
-  refine .intro ε ⟨hε, ?_⟩
   intro h''
   dsimp at h''
   cnsimp only [not_forall_iff_exists', not_implies, not_exists', not_and] at h''
+  specialize h' (ε / 2) (Rat.div_pos hε (by decide))
+  specialize h'' (ε / 2) (Rat.div_pos hε (by decide))
+  refine (x.isCauSeq (ε / 4) (Rat.div_pos hε (by decide))).elim fun i hi => ?_
+  specialize h i
+  specialize h' i
+  specialize h'' i
+  refine h.elim fun j hj => ?_
+  refine h'.elim fun j' hj' => ?_
+  refine h''.elim fun j'' hj'' => ?_
+  clear h h' h''
+  have hi1 := hi j hj.1
+  have hi2 := hi j' hj'.1
+  have hi3 := hi j'' hj''.1
+  refine (x.seq i).elim fun a ha => ?_
+  refine (x.seq j).elim fun b hb => ?_
+  refine (x.seq j').elim fun b' hb' => ?_
+  refine (x.seq j'').elim fun b'' hb'' => ?_
+  cnsimp only [ha, hb, hb', hb'', Noncomputable.test_mk, Noncomputable.map_mk,
+    Fun.apply_mkFun'] at hi1 hi2 hi3 hj hj' hj''
+  replace hj := hj.2
+  replace hj' := hj'.2
+  replace hj'' := hj''.2
+  dsimp at *
+  cnsimp only [Rat.not_lt] at hj hj' hj''
+  cnsimp only [Rat.abs_sub_comm b] at hi1
+  have h := Rat.abs_sub_lt_trans hi1 hi2
+  have h' := Rat.abs_sub_lt_trans hi1 hi3
+  have : ε / 4 + ε / 4 ~= ε / 2 := by
+    cnsimp only [Rat.div_eq'_mul_inv, ← Rat.mul_add, show 4⁻¹ + 4⁻¹ ~= (2⁻¹ : Rat) from rfl]
+    rfl
+  cnsimp only [Rat.abs_lt, Rat.neg_sub, this] at h h'
+  cnsimp only [Rat.le_abs] at hj
+  refine hj.elim (fun hj => ?_) (fun hj => ?_)
+  · cnsimp only [Rat.sub_lt_iff_lt_add] at h h'
+    apply Rat.lt_irrefl ε
+    calc
+      ε ≤ b := hj
+      _ < ε / 2 + b' := h.2
+      _ ≤ ε / 2 + ε / 2 := Rat.add_le_add_left hj'
+      _ ~= ε := Rat.half_add_half ε
+  · cnsimp only [Rat.sub_eq'_add_neg, Rat.add_comm b''] at h'
+    cnsimp only [← Rat.lt_sub_iff_add_lt, Rat.sub_eq'_add_neg] at h'
+    apply Rat.lt_irrefl ε
+    calc
+      ε ≤ -b := hj
+      _ < ε / 2 + -b'' := h'.1
+      _ ≤ ε / 2 + ε / 2 := Rat.add_le_add_left hj''
+      _ ~= ε := Rat.half_add_half ε
+
+theorem PreReal.not_zero_pos : ¬(0 : PreReal).pos := by
+  intro h
+  dsimp only [pos] at h
+  refine h.elim fun ε hε => ?_
+  refine hε.2.elim fun i hi => ?_
+  specialize hi i (Nat.le_refl _)
+  cnsimp only [PreReal.seq_ofNat, Noncomputable.test_mk, Fun.apply_mkFun'] at hi
+  exact Rat.lt_asymm hε.1 hi
+
+theorem PreReal.one_pos : (1 : PreReal).pos := by
+  dsimp only [pos]
+  refine .intro (1 / 2) ⟨by decide, ?_⟩
+  refine .intro 0 fun j hj => ?_
+  cnsimp; decide
+
+theorem PreReal.add_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.add y).pos := by
+  dsimp [pos, add] at hx hy ⊢
+  refine hx.elim fun ε hε => ?_
+  refine hy.elim fun ε' hε' => ?_
+  refine .intro (ε + ε') ⟨Rat.add_pos hε.1 hε'.1, ?_⟩
+  refine hε.2.elim fun i hi => ?_
+  refine hε'.2.elim fun i' hi' => ?_
+  refine .intro (max i i') fun j hj => ?_
+  replace hj := Nat.max_le'.mp hj
+  specialize hi j hj.1
+  specialize hi' j hj.2
+  refine (x.seq j).elim fun a ha => ?_
+  refine (y.seq j).elim fun b hb => ?_
+  cnsimp only [ha, hb, Noncomputable.bind_mk, Fun.apply_mkFun',
+    Noncomputable.test_mk] at hi hi' ⊢
+  exact Rat.add_lt_add hi hi'
+
+theorem PreReal.mul_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.mul y).pos := by
+  dsimp [pos, mul] at hx hy ⊢
+  refine hx.elim fun ε hε => ?_
+  refine hy.elim fun ε' hε' => ?_
+  refine .intro (ε * ε') ⟨Rat.mul_pos hε.1 hε'.1, ?_⟩
+  refine hε.2.elim fun i hi => ?_
+  refine hε'.2.elim fun i' hi' => ?_
+  refine .intro (max i i') fun j hj => ?_
+  replace hj := Nat.max_le'.mp hj
+  specialize hi j hj.1
+  specialize hi' j hj.2
+  refine (x.seq j).elim fun a ha => ?_
+  refine (y.seq j).elim fun b hb => ?_
+  cnsimp only [ha, hb, Noncomputable.bind_mk, Noncomputable.map_mk,
+    Fun.apply_mkFun', Noncomputable.test_mk] at hi hi' ⊢
+  exact Rat.mul_lt_mul (Rat.le_of_lt hε.1) (Rat.le_of_lt hε'.1) hi hi'
+
+theorem PreReal.mul_add (x y z : PreReal) : x.mul (y.add z) ~= (x.mul y).add (x.mul z) := by
+  apply eqv_of_seq_eq
+  intro i
+  dsimp only [mul, add]
+  refine (x.seq i).elim fun a ha => ?_
+  refine (y.seq i).elim fun b hb => ?_
+  refine (z.seq i).elim fun c hc => ?_
+  cnsimp [ha, hb, hc, Rat.mul_add]
+
+theorem PreReal.eq'_of_sub_eq'_zero {x y : PreReal} (h : x.add y.neg ~= 0) : x ~= y := by
+  calc
+    x ~= (x.add y.neg).add y := by
+      cnsimp only [PreReal.add_assoc, PreReal.add_comm y.neg,
+        PreReal.add_neg, PreReal.add_zero, eq'_self_iff]
+    _ ~= y := by cnsimp only [h, PreReal.add_comm 0, PreReal.add_zero, eq'_self_iff]
+
+@[ccongr]
+theorem PreReal.mul_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+    x₁.mul y₁ ~= x₂.mul y₂ := by
+  have xdiff : x₁.add x₂.neg ~= 0 := by
+    cnsimp only [hx, PreReal.add_neg, eq'_self_iff]
+  have ydiff : y₁.add y₂.neg ~= 0 := by
+    cnsimp only [hy, PreReal.add_neg, eq'_self_iff]
+  have h' := PreReal.mul_of_eq'_zero x₁ _ ydiff
+  cnsimp only [PreReal.mul_add, PreReal.mul_neg] at h'
+  replace h' := PreReal.eq'_of_sub_eq'_zero h'
+  refine h'.trans ?_
+  cnsimp only [(PreReal.mul_comm · y₂)]
+  have h'' := PreReal.mul_of_eq'_zero y₂ _ xdiff
+  cnsimp only [PreReal.mul_add, PreReal.mul_neg] at h''
+  exact PreReal.eq'_of_sub_eq'_zero h''
+
+theorem PreReal.neg_add_cancel (x : PreReal) : x.neg.add x ~= 0 := by
+  cnsimp only [PreReal.add_comm x.neg, PreReal.add_neg, eq'_self_iff]
+
+theorem PreReal.neg_add (x y : PreReal) : (x.add y).neg ~= y.neg.add x.neg := by
+  calc
+    (x.add y).neg ~= (x.add y).neg.add ((x.add (y.add y.neg)).add x.neg) := by
+      cnsimp only [PreReal.add_neg, PreReal.add_zero, eq'_self_iff]
+    _ ~= ((x.add y).neg.add (x.add y)).add (y.neg.add x.neg) := by
+      cnsimp only [PreReal.add_assoc, eq'_self_iff]
+    _ ~= y.neg.add x.neg := by
+      cnsimp only [PreReal.add_comm (x.add y).neg, PreReal.add_neg,
+        PreReal.add_comm 0, PreReal.add_zero, eq'_self_iff]
+
+theorem PreReal.neg_neg (x : PreReal) : x.neg.neg ~= x := by
+  calc
+    x.neg.neg ~= x.neg.neg.add (x.neg.add x) := by
+      cnsimp only [PreReal.add_comm x.neg, PreReal.add_neg, PreReal.add_zero, eq'_self_iff]
+    _ ~= x := by
+      cnsimp only [← PreReal.add_assoc, PreReal.add_comm x.neg.neg x.neg, PreReal.add_neg,
+        PreReal.add_comm 0, PreReal.add_zero, eq'_self_iff]

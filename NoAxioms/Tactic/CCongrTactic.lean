@@ -63,6 +63,58 @@ def tryCongrOneSimple (goal : MVarId) (c : CCongrTheorem) (p : SimpleCCongrProce
   goal.assign proof
   return some goals
 
+def tryCongrOneNewSimple (goal : MVarId) (c : CCongrTheorem) (p : NewSimpleCongr) : MetaM (Option (List MVarId)) := withReducible do
+  trace[Meta.Tactic.simp.congr] m!"try new simple congruence {c.thmName} on {goal.name} of type {← goal.getType}"
+  let goalType ← goal.getType'
+  let goalType := goalType.consumeMData
+  let mkApp2 rel lhs rhs := goalType | unreachable!
+  let lhsArgs := lhs.getAppArgs'
+  if lhsArgs.size != p.funArity then
+    trace[Meta.Tactic.simp.congr] m!"arity mismatch on lhs {lhsArgs.size} and {p.funArity}"
+    return none
+  let rhsArgs := rhs.getAppArgs'
+  if rhsArgs.size != p.funArity then
+    trace[Meta.Tactic.simp.congr] m!"arity mismatch on rhs {rhsArgs.size} and {p.funArity}"
+    return none
+  let mut state : Array Expr := Array.replicate p.proofArity default
+  try
+    state ← traverseNewTypes rel p.relArgsIterate state
+    state ← traverseNewTypes lhs p.lhsArgsIterate state
+    state ← traverseNewTypes rhs p.rhsArgsIterate state
+  catch e =>
+    trace[Meta.Tactic.simp.congr] e.toMessageData
+    return none
+  let levels := lhs.getAppFn'.constLevels!
+  let lparams := p.lparamsPerm.map (levels[·]!)
+  let mut goals := []
+  let lfun (n : Name) : Option Level := match n with | .num _ n => levels[n]! | _ => none
+  for act in p.preActions do
+    match act with
+    | .synth nec i type =>
+      unless nec do
+        continue
+      let type := (type.instantiate state).instantiateLevelParamsCore lfun
+      try
+        let expr ← synthInstance type
+        state := state.set! i expr
+      catch _ =>
+        trace[Meta.Tactic.simp.congr] m!"discharge failed"
+    | .exact .. => continue
+    | .introMVar i type =>
+      let type := (type.instantiate state).instantiateLevelParamsCore lfun
+      let mvar ← mkFreshExprMVar type
+      state := state.set! i mvar
+    | .rel i lhs rhs rel =>
+      let rel := (rel.instantiate state).instantiateLevelParamsCore lfun
+      let goalType := mkApp2 rel state[lhs]! state[rhs]!
+      let goal ← mkFreshExprSyntheticOpaqueMVar goalType
+      state := state.set! i goal
+      goals := goal.mvarId! :: goals
+  let proof : Expr := mkAppN (Expr.const c.thmName lparams) state
+  trace[Meta.Tactic.simp.congr] m!"constructed proof {proof}"
+  goal.assign proof
+  return some goals
+
 def tryCongrOne (goal : MVarId) (c : CCongrTheorem) (pos : Array Nat) : MetaM (Option (List MVarId)) := withReducible do
   trace[Meta.Tactic.simp.congr] m!"try congruence {c.thmName} on {goal}"
   let goalType ← goal.getType'
@@ -153,6 +205,7 @@ def tryCongrs (goal : MVarId) : MetaM (Option (List MVarId)) := do
     let goals ← match c.procedure with
     | .expensiveProcedure p => tryCongrOne goal c p
     | .simpleProcedure p => tryCongrOneSimple goal c p
+    | .newSimpleProcedure p => tryCongrOneNewSimple goal c p
     if goals.isSome then
       return goals
   return none

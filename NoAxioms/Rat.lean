@@ -1814,11 +1814,14 @@ theorem Rat.mul_lt_mul_left {a b c : Rat} (ha : 0 < a) : a * b < a * c ↔ b < c
   cnsimp only [Rat.mul_comm a]
   exact Rat.mul_lt_mul_right ha
 
-theorem Rat.mul_lt_mul {a b c d : Rat} (ha : 0 < a) (hb : 0 < b) (h : a < c) (h' : b < d) :
+theorem Rat.mul_lt_mul {a b c d : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) (h : a < c) (h' : b < d) :
     a * b < c * d := by
+  by_cases' h'' : b ~= 0
+  · cnsimp only [h'', Rat.mul_zero] at h' ⊢
+    exact Rat.mul_pos (Rat.lt_of_le_of_lt ha h) h'
   calc
-    a * b < c * b := Rat.mul_lt_mul_of_pos_right hb h
-    c * b < c * d := Rat.mul_lt_mul_of_pos_left (Rat.lt_trans ha h) h'
+    a * b < c * b := Rat.mul_lt_mul_of_pos_right (Rat.lt_of_le_of_ne hb (Ne'.symm h'')) h
+    c * b < c * d := Rat.mul_lt_mul_of_pos_left (Rat.lt_of_le_of_lt ha h) h'
 
 theorem Rat.mul_le_mul {a b c d : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) (h : a ≤ c) (h' : b ≤ d) :
     a * b ≤ c * d := by

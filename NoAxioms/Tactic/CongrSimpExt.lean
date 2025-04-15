@@ -115,16 +115,87 @@ structure SimpleCCongrProcedure where
   params : Array ParameterFillOutProcedure
 deriving Inhabited, Repr
 
+inductive CongrAssignmentType where
+  /-- Assign the `i`th parameter of the proof. -/
+  | assign (i : Nat)
+  /-- Similar to `take` but with a defeq check. -/
+  | take (i : Nat)
+  /-- Don't do anything. -/
+  | ignore
+  deriving Inhabited, Repr
+
+inductive CongrActionType where
+  /--
+  Introduce a meta-variable for the `i`th parameter of the proof
+  (for instance synthesization).
+  `type` represents the type of the meta-variable, with parameters abstracted
+  and level parameters described using indices.
+  -/
+  | introMVar (i : Nat) (type : Expr)
+  /--
+  Use instance synthesization to compute the `i`th parameter.
+  `type` represents the type of what to put in `i`, with parameters abstracted
+  and level parameters described using indices.
+  If `necessary` is false, then it is also filled out by a right-hand side parameter.
+  -/
+  | synth (necessary : Bool) (i : Nat) (type : Expr)
+  /--
+  Insert a particular exact value.
+  `expr` represents the expression to put in `i`, with parameters abstracted
+  and level parameters described using indices.
+  -/
+  | exact (i : Nat) (expr : Expr)
+  /--
+  Provide a proof that `rel lhs rhs` as an `i`th parameter.
+  `lhs` represents the index of the parameter for the left-hand side and `rhs`
+  the index for the right-hand side.
+  `rel` represents the relation to use, with parameters abstracted and level
+  parameters described using indices.
+  -/
+  | rel (i : Nat) (lhs rhs : Nat) (rel : Expr)
+  deriving Inhabited, Repr
+
+structure NewSimpleCongr where
+  /--
+  Arity of the function.
+  -/
+  funArity : Nat
+  /--
+  The amount of parameters for the proof declaration.
+  -/
+  proofArity : Nat
+  /--
+  The indices of the level parameters to use for the proof declaration,
+  indexing into the application function levels.
+  -/
+  lparamsPerm : List Nat
+  /-- How to treat the relation arguments. -/
+  relArgsIterate : Array CongrAssignmentType
+  /-- How to treat the left-hand side arguments. -/
+  lhsArgsIterate : Array CongrAssignmentType
+  /-- How to treat the right-hand side arguments. -/
+  rhsArgsIterate : Array CongrAssignmentType
+  /-- Everything that needs to be done until all `.rel` actions are done. -/
+  preActions : Array CongrActionType
+  /--
+  Everything to do after all `.rel` actions are done. These are usually less
+  important proof assignments using `.synth` or `.exact`.
+  Shouldn't contains `.rel` actions.
+  -/
+  postActions : Array CongrActionType
+  deriving Inhabited, Repr
+
 inductive Procedure where
   | expensiveProcedure (hypothesesPos : Array Nat)
   | simpleProcedure (thm : SimpleCCongrProcedure)
+  | newSimpleProcedure (thm : NewSimpleCongr)
 deriving Inhabited, Repr
 
 structure CCongrTheorem where
   rel : Name -- name of the relation
   funName : Name
   thmName : Name
-  priority  : Nat
+  priority : Nat
   procedure : Procedure
 deriving Inhabited, Repr
 
@@ -308,9 +379,145 @@ def mkSimpleCCongrTheorem (declName : Name) (prio : Nat) : MetaM CCongrTheorem :
       priority := prio
     }
 
+inductive CongrAssignmentMode where
+  | rel | lhs | rhs
+  deriving Inhabited, Repr
+
+inductive MVarAssignState where
+  | none | rel | lhs | rhs
+  deriving Inhabited, Repr
+
+def mkNewSimpleCongrForDecl (decl : Name) (priority : Nat) : MetaM CCongrTheorem := withReducible do
+  let c ← getConstVal decl
+  let type := c.type
+  let (xs, bis, t) ← forallMetaTelescopeReducing type
+  let mkApp2 rel lhs rhs := t |
+    throwError "invalid simple ccongr, not a relation application: {t}"
+  rel.withApp fun relFn relArgs =>
+  lhs.withApp fun lhsFn lhsArgs =>
+  rhs.withApp fun rhsFn rhsArgs => do
+    unless relFn.isConst do
+      throwError "invalid simple ccongr, relation is not a constant application: {rel}"
+    let (lperm, lfun) ← deriveLevelParamPerm lhsFn c.levelParams
+    let relName := relFn.constName!
+    if ((← getEnv).findAsync? (.str relName "trans")).isNone then
+      throwError "invalid simple ccongr, relation {relName} doesn't have a `trans` lemma: {rel}"
+    unless lhsFn.isConst && rhsFn.isConst && lhsFn.constName! == rhsFn.constName! do
+      throwError "invalid simple ccongr, left and right-hand sides aren't applications of the same function: {t}"
+    unless lhsArgs.size == rhsArgs.size do
+      throwError "invalid simple ccongr, left and right-hand sides have a different amount of parameters: {t}"
+    unless lhsFn.constLevels! == rhsFn.constLevels! do
+      throwError "invalid simple ccongr, left and right-hand sides have different universe levels: {t}"
+    let mut map : MVarIdMap (Nat × MVarAssignState) := ∅
+    let mut i := 0
+    for x in xs do
+      map := map.insert x.mvarId! (i, .none)
+      i := i + 1
+    let (relArgTypes, map') ← collectAssignmentTypes .rel relArgs map
+    let (lhsArgTypes, map') ← collectAssignmentTypes .lhs lhsArgs map'
+    let (rhsArgTypes, map') ← collectAssignmentTypes .rhs rhsArgs map'
+    map := map'
+    let mut actions : Array CongrActionType := #[]
+    let mut postActions : Array CongrActionType := #[]
+    let mut relDependents : MVarIdSet := ∅
+    for x in xs, bi in bis do
+      if bi.isInstImplicit || bi.isImplicit then
+        continue
+      let mvar := x.mvarId!
+      let info := map.find! mvar
+      let type ← mvar.getType'
+      unless info.2 matches .none do
+        continue
+      if let some (_, _, _) ← CnSimp.checkIsRel type then
+        for mm in (← mvar.getMVarDependencies) do
+          relDependents := relDependents.insert mm
+    for x in xs, bi in bis do
+      let mvar := x.mvarId!
+      let info := map.find! mvar
+      let type ← mvar.getType'
+      if bi.isInstImplicit then
+        if info.2 matches .rel | .lhs then
+          continue
+        let type := abstractVars xs lfun type
+        let stat := .synth (info.2 matches .none) info.1 type
+        if relDependents.contains mvar || info.2 matches .none then
+          actions := actions.push stat
+        else
+          postActions := postActions.push stat
+      else if bi.isImplicit then
+        unless info.2 matches .none do
+          continue
+        let type := abstractVars xs lfun type
+        let stat := .introMVar info.1 type
+        if relDependents.contains mvar then
+          actions := actions.push stat
+        else
+          postActions := postActions.push stat
+      else
+        unless info.2 matches .none do
+          continue
+        if let some (rel, lhs, rhs) ← CnSimp.checkIsRel type then
+          if lhs.isMVar && rhs.isMVar then
+            let lInfo := map.find! lhs.mvarId!
+            let rInfo := map.find! rhs.mvarId!
+            let rel := abstractVars xs lfun rel
+            actions := actions.push (.rel info.1 lInfo.1 rInfo.1 rel)
+            continue
+          else
+            logInfo m!"not rel correct: {type}"
+        if type.isOptParam then
+          let value := abstractVars xs lfun type.appArg!
+          actions := actions.push (.exact info.1 value)
+        else
+          logInfo m!"not rel: {type}"
+    return {
+      thmName := decl,
+      rel := relName
+      funName := lhsFn.constName!
+      priority := priority
+      procedure := .newSimpleProcedure {
+        funArity := lhsArgs.size
+        proofArity := xs.size
+        lparamsPerm := lperm
+        relArgsIterate := relArgTypes
+        lhsArgsIterate := lhsArgTypes
+        rhsArgsIterate := rhsArgTypes
+        preActions := actions
+        postActions := postActions
+      }
+    }
+where
+  abstractVars (mvars : Array Expr) (lfun : Name → Option Level) (e : Expr) : Expr :=
+    (e.abstract mvars.reverse).instantiateLevelParamsCore lfun
+  collectAssignmentTypes (mode : CongrAssignmentMode) (args : Array Expr)
+      (mvarMap : MVarIdMap (Nat × MVarAssignState)) :
+      MetaM (Array CongrAssignmentType × MVarIdMap (Nat × MVarAssignState)) := do
+    let mut mvarMap := mvarMap
+    let mut types := #[]
+    for arg in args do
+      unless arg.isMVar do
+        if mode matches .lhs | .rhs then
+          throwError "invalid simple ccongr, left or right-hand side has concrete argument: {arg}"
+        types := types.push .ignore -- resolved through typing (...hopefully?)
+        continue
+      let mvar := arg.mvarId!
+      let info := mvarMap.find! mvar
+      if info.2 matches .none then
+        types := types.push (.assign info.1)
+        let state := match mode with
+        | .rel => .rel
+        | .lhs => .lhs
+        | .rhs => .rhs
+        mvarMap := mvarMap.insert mvar (info.1, state)
+      else if mode matches .rhs then
+        types := types.push (.take info.1)
+      else
+        types := types.push .ignore -- resolved through typing (...hopefully?)
+    return (types, mvarMap)
+
 def addCCongrTheorem (declName : Name) (attrKind : AttributeKind) (prio : Nat) : MetaM Unit := do
   try
-    let lemma ← mkSimpleCCongrTheorem declName prio
+    let lemma ← mkNewSimpleCongrForDecl declName prio
     ccongrExtension.add lemma attrKind
   catch e =>
     Lean.logInfo m!"{e.toMessageData}"
@@ -328,6 +535,39 @@ initialize
       let prio ← getAttrParamOptPrio stx[1]
       discard <| addCCongrTheorem declName attrKind prio |>.run {} {}
   }
+
+def traverseNewTypes (e : Expr) (rules : Array CongrAssignmentType) (state : Array Expr) : MetaM (Array Expr) :=
+  go e state rules.size (Nat.le_refl _)
+where
+  go (e : Expr) (state : Array Expr) (i : Nat) (hi : i ≤ rules.size) : MetaM (Array Expr) :=
+    match h : i with
+    | 0 => pure state
+    | k + 1 =>
+      match e with
+      | .mdata _ e => go e state i (h ▸ hi)
+      | .app f a =>
+        match rules[k]'hi with
+        | .assign n => go f (state.set! n a) k (Nat.le_of_lt hi)
+        | .take n => do
+          if ← withReducibleAndInstances <| isDefEq state[n]! a then
+            go f (state.set! n a) k (Nat.le_of_lt hi)
+          else
+            throwError "congruence failed"
+        | .ignore => go f state k (Nat.le_of_lt hi)
+      | _ => pure state
+
+def constructFromTypes (fn : Expr) (rules : Array CongrAssignmentType) (state : Array Expr) : MetaM Expr :=
+  go fn 0
+where
+  go (e : Expr) (i : Nat) : MetaM Expr :=
+    if h : i < rules.size then
+      match rules[i]'h with
+      | .assign n | .take n => go (.app e state[n]!) (i + 1)
+      | .ignore =>
+        throwError "invalid congruence, did not expect .ignore on rhs"
+    else
+      pure e
+  termination_by rules.size - i
 
 end CCongr
 

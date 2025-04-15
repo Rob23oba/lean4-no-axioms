@@ -72,7 +72,7 @@ def PreReal.ofRat (x : Rat) : PreReal where
     intro j hj
     dsimp
     cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun',
-      Rat.sub_self, Rat.abs_of_nonneg (by decide : (0 : Rat) ≤ 0)]
+      sub_self, Rat.abs_of_nonneg (by decide : (0 : Rat) ≤ 0)]
     exact hε
 
 instance : OfNat PreReal n := ⟨PreReal.ofRat n⟩
@@ -84,7 +84,7 @@ theorem PreReal.seq_ofNat (n i : Nat) : seq (no_index (OfNat.ofNat n)) i ~= .mk 
 @[ccongr]
 theorem PreReal.ofRat_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : ofRat x₁ ~= ofRat x₂ := by
   dsimp only [ofRat]
-  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun', Rat.sub_self,
+  cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun', sub_self,
     PreReal.eqv_def, hx, Rat.abs_ofNat]
   intro _ h
   refine .intro 0 ?_
@@ -99,7 +99,7 @@ theorem Nat.le_max_right' (x y : Nat) : y ≤ max x y := by
   cnsimp only [Nat.le_max']
   exact Or'.inr (Nat.le_refl _)
 
-def PreReal.add (x y : PreReal) : PreReal where
+protected def PreReal.add (x y : PreReal) : PreReal where
   seq i :=
     (x.seq i).bind fun' a =>
     (y.seq i).bind fun' b =>
@@ -134,11 +134,11 @@ def PreReal.add (x y : PreReal) : PreReal where
     cnsimp only [Rat.half_add_half] at h''
     refine Rat.lt_of_eq'_of_lt ?_ h''
     apply Rat.abs_congr
-    cnsimp [Rat.sub_eq'_add_neg, Rat.neg_add, ← Rat.add_assoc, Rat.add_right_comm _ (-a₂) a₃,
-      Rat.add_comm a₃ a₄]
+    cnsimp [sub_eq_add_neg, neg_add_rev, ← add_assoc, add_right_comm _ (-a₂) a₃,
+      add_comm a₃ a₄]
 
 @[ccongr]
-theorem PreReal.add_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+protected theorem PreReal.add_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁.add y₁ ~= x₂.add y₂ := by
   cnsimp only [eqv_def] at *
   dsimp only [PreReal.add]
@@ -162,29 +162,29 @@ theorem PreReal.add_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (h
   cnsimp only [Rat.half_add_half] at h
   refine Rat.lt_of_eq'_of_lt ?_ h
   apply Rat.abs_congr
-  cnsimp [Rat.sub_eq'_add_neg, Rat.neg_add, ← Rat.add_assoc, Rat.add_right_comm _ (-a₃),
-    Rat.add_right_comm _ (-a₁) a₄]
+  cnsimp [sub_eq_add_neg, neg_add_rev, ← add_assoc, add_right_comm _ (-a₃),
+    add_right_comm _ (-a₁) a₄]
 
-theorem PreReal.add_comm (x y : PreReal) : x.add y ~= y.add x := by
+protected theorem PreReal.add_comm (x y : PreReal) : x.add y ~= y.add x := by
   apply eqv_of_seq_eq fun i => ?_
-  dsimp only [add]
+  dsimp only [PreReal.add]
   refine (x.seq i).elim (fun a ha => ?_)
   refine (y.seq i).elim (fun a' ha' => ?_)
-  cnsimp [ha, ha', Rat.add_comm a]
+  cnsimp [ha, ha', add_comm a]
 
-theorem PreReal.add_assoc (x y z : PreReal) : (x.add y).add z ~= x.add (y.add z) := by
+protected theorem PreReal.add_assoc (x y z : PreReal) : (x.add y).add z ~= x.add (y.add z) := by
   apply eqv_of_seq_eq fun i => ?_
-  dsimp only [add]
+  dsimp only [PreReal.add]
   refine (x.seq i).elim (fun a ha => ?_)
   refine (y.seq i).elim (fun a' ha' => ?_)
   refine (z.seq i).elim (fun a'' ha'' => ?_)
-  cnsimp [ha, ha', ha'', Rat.add_assoc]
+  cnsimp [ha, ha', ha'', add_assoc]
 
-theorem PreReal.add_zero (x : PreReal) : x.add 0 ~= x := by
+protected theorem PreReal.add_zero (x : PreReal) : x.add 0 ~= x := by
   apply eqv_of_seq_eq fun i => ?_
-  dsimp only [add]
+  dsimp only [PreReal.add]
   refine (x.seq i).elim (fun a ha => ?_)
-  cnsimp [ha, Rat.add_zero, Rat.natCast_zero]
+  cnsimp [ha, add_zero, Rat.natCast_zero]
 
 def PreReal.neg (x : PreReal) : PreReal where
   seq i := (x.seq i).map (fun' y => -y)
@@ -196,8 +196,8 @@ def PreReal.neg (x : PreReal) : PreReal where
     refine (x.seq j).elim (fun a' ha' => ?_)
     dsimp
     cnsimp [ha, ha'] at hi ⊢
-    cnsimp only [← Rat.abs_neg (a + -a'), Rat.sub_eq'_add_neg, Rat.neg_neg, Rat.add_comm _ a]
-    cnsimp only [← Rat.sub_eq'_add_neg, Rat.neg_sub]
+    cnsimp only [← Rat.abs_neg (a + -a'), sub_eq_add_neg, neg_neg, add_comm _ a]
+    cnsimp only [← sub_eq_add_neg, neg_sub]
     exact hi
 
 @[ccongr]
@@ -213,8 +213,8 @@ theorem PreReal.neg_congr {x₁ x₂ : PreReal} (hx : x₁ ~= x₂) : x₁.neg ~
   refine (x₁.seq j).elim (fun a ha => ?_)
   refine (x₂.seq j).elim (fun a' ha' => ?_)
   cnsimp [ha, ha'] at hi ⊢
-  cnsimp only [← Rat.abs_neg (a + -a'), Rat.sub_eq'_add_neg, Rat.neg_neg, Rat.add_comm _ a]
-  cnsimp only [← Rat.sub_eq'_add_neg, Rat.neg_sub]
+  cnsimp only [← Rat.abs_neg (a + -a'), sub_eq_add_neg, neg_neg, add_comm _ a]
+  cnsimp only [← sub_eq_add_neg, neg_sub]
   exact hi
 
 theorem PreReal.add_neg (x : PreReal) : x.add x.neg ~= 0 := by
@@ -250,15 +250,15 @@ theorem PreReal.pos_congr_imp {x₁ x₂ : PreReal} (hx : x₁ ~= x₂) :
   specialize hi' j hj.2
   refine (x₁.seq j).elim fun a ha => ?_
   refine (x₂.seq j).elim fun b hb => ?_
-  cnsimp [ha, hb, Rat.abs_lt, Rat.neg_sub] at hi hi' ⊢
+  cnsimp [ha, hb, Rat.abs_lt, neg_sub] at hi hi' ⊢
   replace hi' := hi'.2
   cnsimp only [Rat.sub_lt_iff_lt_add] at hi'
   replace hi := Rat.lt_trans hi hi'
-  cnsimp only [Rat.add_comm _ b] at hi
+  cnsimp only [add_comm _ b] at hi
   cnsimp only [← Rat.sub_lt_iff_lt_add] at hi
   refine Rat.lt_of_eq'_of_lt ?_ hi
   calc
-    ε / 2 ~= ε / 2 + ε / 2 - ε / 2 := by cnsimp only [Rat.add_sub_cancel_right, eq'_self_iff]
+    ε / 2 ~= ε / 2 + ε / 2 - ε / 2 := by cnsimp only [add_sub_cancel_right, eq'_self_iff]
     _ ~= ε - ε / 2 := by cnsimp only [Rat.half_add_half, eq'_self_iff]
 
 set_option Elab.async false
@@ -322,9 +322,9 @@ theorem PreReal.exists_gt_seq (x : PreReal) :
     have := PreReal.le_seqMax x i i (Nat.le_refl _)
     refine (x.seq i).elim fun b hb => ?_
     refine (x.seq j).elim fun c hc => ?_
-    cnsimp [ha, hb, hc, Rat.abs_lt, Rat.neg_sub] at hi this ⊢
+    cnsimp [ha, hb, hc, Rat.abs_lt, neg_sub] at hi this ⊢
     replace hi := hi.1
-    cnsimp only [Rat.sub_lt_iff_lt_add, Rat.add_comm 1] at hi
+    cnsimp only [Rat.sub_lt_iff_lt_add, add_comm 1 b] at hi
     apply Rat.lt_of_lt_of_le hi
     apply Rat.add_le_add_right
     exact this
@@ -349,29 +349,29 @@ theorem PreReal.mul_rat_cond1 {e a b : Rat}
     e / b / 4 * (e / a / 4) + a * (e / a / 4) + e / b / 4 * b ≤ e := by
   calc
     _ ~= e * e * a⁻¹ * b⁻¹ * 16⁻¹ + e * 4⁻¹ + e * 4⁻¹ := by
-      cnsimp only [Rat.div_eq'_mul_inv, ← Rat.mul_assoc, (Rat.mul_right_comm · · e),
-        Rat.mul_comm a e, Rat.mul_right_comm _ _ b]
-      cnsimp only [Rat.mul_assoc e a, Rat.mul_assoc e b⁻¹,
-        Rat.mul_inv_cancel (Rat.ne_of_gt ha),
-        Rat.inv_mul_cancel (Rat.ne_of_gt hb),
-        Rat.mul_one, Rat.add_right_cancel_iff]
-      cnsimp only [Rat.mul_right_comm _ 4⁻¹ a⁻¹, Rat.mul_right_comm _ b⁻¹ a⁻¹]
-      cnsimp only [Rat.mul_assoc _ 4⁻¹]
+      cnsimp only [div_eq_mul_inv, ← mul_assoc, (mul_right_comm · · e),
+        mul_comm a e, mul_right_comm _ _ b]
+      cnsimp only [mul_assoc e a, mul_assoc e b⁻¹,
+        mul_inv_cancel (Rat.ne_of_gt ha),
+        inv_mul_cancel (Rat.ne_of_gt hb),
+        mul_one, add_right_cancel_iff]
+      cnsimp only [mul_right_comm _ 4⁻¹ a⁻¹, mul_right_comm _ b⁻¹ a⁻¹]
+      cnsimp only [mul_assoc _ (4 : Rat)⁻¹]
       rfl
     _ ≤ e * 1 := by
-      cnsimp only [Rat.mul_assoc e, ← Rat.mul_add]
-      cnsimp only [Rat.add_assoc]
+      cnsimp only [mul_assoc e, ← Rat.mul_add]
+      cnsimp only [add_assoc]
       apply Rat.mul_le_mul_of_nonneg_left (Rat.le_of_lt he)
       cnsimp only [← Rat.le_sub_iff_add_le, show (1 : Rat) - (4⁻¹ + 4⁻¹) ~= 8 * 16⁻¹ from rfl]
-      cnsimp only [← Rat.mul_assoc]
+      cnsimp only [← mul_assoc]
       apply Rat.mul_le_mul_of_nonneg_right (by decide)
-      cnsimp only [← Rat.div_eq'_mul_inv]
+      cnsimp only [← div_eq_mul_inv]
       cnsimp only [Rat.div_le_iff hb]
       cnsimp only [Rat.div_le_iff ha]
-      cnsimp only [Rat.mul_right_comm _ b, he']
+      cnsimp only [mul_right_comm _ b, he']
     _ ~= e := by cnsimp
 
-theorem Rat.mul_le_mul_of_abs_le_of_abs_le {a b c d : Rat}
+theorem mul_le_mul_of_abs_le_of_abs_le {a b c d : Rat}
     (h : a.abs ≤ c) (h' : b.abs ≤ d) :
     a * b ≤ c * d := by
   have : a.abs * b.abs ≤ c * d :=
@@ -401,22 +401,22 @@ theorem PreReal.mul_rat_cond' {a b e x y x' y' : Rat}
         _ ≤ (e / b / 4 + x') * (e / a / 4 + y') - x' * y' :=
           Rat.sub_le_sub_right
             (Rat.mul_le_mul
-              (Rat.le_of_le_of_eq' hx (Rat.sub_add_cancel ..).symm)
-              (Rat.le_of_le_of_eq' hy (Rat.sub_add_cancel ..).symm)
+              (Rat.le_of_le_of_eq' hx (sub_add_cancel ..).symm)
+              (Rat.le_of_le_of_eq' hy (sub_add_cancel ..).symm)
               (Rat.add_le_add_right (Rat.abs_le.mp hxx').1)
               (Rat.add_le_add_right (Rat.abs_le.mp hyy').1))
         _ ~= e / b / 4 * (e / a / 4) + x' * (e / a / 4) + e / b / 4 * y' := by
           cnsimp only [Rat.mul_add]
-          cnsimp only [Rat.add_mul, eq'_self_iff, ← Rat.add_assoc, Rat.add_sub_cancel_right]
+          cnsimp only [Rat.add_mul, eq'_self_iff, ← add_assoc, add_sub_cancel_right]
     · obtain ⟨hx, hy⟩ := hxy
       calc
         x * y - x' * y' ~= (x - x' + x') * (y - y' + y') - x' * y' := by cnsimp
         _ ~= (x - x') * (y - y') + x' * (y - y') + (x - x') * y' := by
           cnsimp only [Rat.mul_add]
-          cnsimp only [Rat.add_mul, eq'_self_iff, ← Rat.add_assoc, Rat.add_sub_cancel_right]
+          cnsimp only [Rat.add_mul, eq'_self_iff, ← add_assoc, add_sub_cancel_right]
         _ ≤ e / b / 4 * (e / a / 4) + x' * (e / a / 4) + e / b / 4 * y' :=
           Rat.add_le_add
-            (Rat.add_le_add (Rat.mul_le_mul_of_abs_le_of_abs_le hxx' hyy')
+            (Rat.add_le_add (mul_le_mul_of_abs_le_of_abs_le hxx' hyy')
               (Rat.mul_le_mul_of_nonneg_left hx (Rat.abs_le.mp hyy').1))
             (Rat.mul_le_mul_of_nonneg_right hy (Rat.abs_le.mp hxx').1)
   calc
@@ -427,8 +427,8 @@ theorem PreReal.mul_rat_cond' {a b e x y x' y' : Rat}
         (Rat.mul_lt_mul_of_pos_left ebdivpos hy')
     _ ≤ e := PreReal.mul_rat_cond1 hepos he hapos hbpos
 
-theorem Rat.neg_sub_neg (x y : Rat) : -x - -y ~= y - x := by
-  cnsimp only [Rat.sub_eq'_add_neg, Rat.neg_neg, Rat.add_comm y, eq'_self_iff]
+theorem neg_sub_neg (x y : Rat) : -x - -y ~= y - x := by
+  cnsimp only [sub_eq_add_neg, neg_neg, add_comm y, eq'_self_iff]
 
 theorem PreReal.mul_rat_cond'' {a b e x y x' y' : Rat}
     (he : 0 < e)
@@ -449,7 +449,7 @@ theorem PreReal.mul_rat_cond'' {a b e x y x' y' : Rat}
     · exact Rat.mul_pos (Rat.mul_pos (by decide) apos) bpos
   have he' : e' ≤ 8 * a * b := he'_eq ▸ Rat.min_le_of_right_le (Rat.le_refl _)
   clear he'_eq he e
-  cnsimp only [Rat.abs_lt, Rat.neg_sub] at hx hy hx' hy'
+  cnsimp only [Rat.abs_lt, neg_sub] at hx hy hx' hy'
   by_cases' h : 0 ≤ x
   · by_cases' h' : 0 ≤ y
     · exact PreReal.mul_rat_cond' (.inl ⟨h, h'⟩) apos bpos hx'.1 hy'.1
@@ -458,26 +458,26 @@ theorem PreReal.mul_rat_cond'' {a b e x y x' y' : Rat}
       have h1 : (x' - x).abs < e' / b / 4 := by
         cnsimp only [Rat.abs_sub_comm x', hxx']
       have h2 : (-y' - -y).abs < e' / a / 4 := by
-        cnsimp only [Rat.neg_sub_neg, hyy']
+        cnsimp only [neg_sub_neg, hyy']
       have := PreReal.mul_rat_cond' (.inr ⟨h, h'⟩) apos bpos hx.1 hy.2 he' he'pos h1 h2
-      cnsimp only [Rat.mul_neg, Rat.neg_sub_neg] at this
+      cnsimp only [mul_neg, neg_sub_neg] at this
       exact this
   · replace h := Rat.neg_nonneg.mpr (Rat.le_of_not_le h)
     by_cases' h' : 0 ≤ y
     · have h1 : (-x' - -x).abs < e' / b / 4 := by
-        cnsimp only [Rat.neg_sub_neg x', hxx']
+        cnsimp only [neg_sub_neg x', hxx']
       have h2 : (y' - y).abs < e' / a / 4 := by
         cnsimp only [Rat.abs_sub_comm y', hyy']
       have := PreReal.mul_rat_cond' (.inr ⟨h, h'⟩) apos bpos hx.2 hy.1 he' he'pos h1 h2
-      cnsimp only [Rat.mul_neg, Rat.neg_mul, Rat.neg_sub_neg] at this
+      cnsimp only [mul_neg, neg_mul, neg_sub_neg] at this
       exact this
     · replace h' := Rat.neg_nonneg.mpr (Rat.le_of_not_le h')
       have h1 : (-x - -x').abs < e' / b / 4 := by
-        cnsimp only [Rat.neg_sub_neg x, Rat.abs_sub_comm x', hxx']
+        cnsimp only [neg_sub_neg x, Rat.abs_sub_comm x', hxx']
       have h2 : (-y - -y').abs < e' / a / 4 := by
-        cnsimp only [Rat.neg_sub_neg y, Rat.abs_sub_comm y', hyy']
+        cnsimp only [neg_sub_neg y, Rat.abs_sub_comm y', hyy']
       have := PreReal.mul_rat_cond' (x := -x) (y := -y) (.inl ⟨h, h'⟩) apos bpos hx'.2 hy'.2 he' he'pos h1 h2
-      cnsimp only [Rat.neg_sub_neg, Rat.neg_mul, Rat.mul_neg] at this
+      cnsimp only [neg_sub_neg, neg_mul, mul_neg] at this
       exact this
 
 theorem PreReal.mul_rat_cond {a b e x y x' y' : Rat}
@@ -487,7 +487,7 @@ theorem PreReal.mul_rat_cond {a b e x y x' y' : Rat}
     (hxx' : (x - x').abs < (e.min (8 * a * b)) / b / 4)
     (hyy' : (y - y').abs < (e.min (8 * a * b)) / a / 4) :
     (x * y - x' * y').abs < e := by
-  cnsimp only [Rat.abs_lt, Rat.neg_sub]
+  cnsimp only [Rat.abs_lt, neg_sub]
   constructor
   · exact PreReal.mul_rat_cond'' he hx hy hx' hy' hxx' hyy'
   · cnsimp only [Rat.abs_sub_comm x, Rat.abs_sub_comm y] at hxx' hyy'
@@ -537,13 +537,13 @@ def PreReal.mul (x y : PreReal) : PreReal where
     cnsimp only [Rat.abs_sub_comm d, Rat.abs_sub_comm d'] at hi1 hi'1
     replace hi := Rat.abs_sub_lt_trans hi1 hi2
     replace hi' := Rat.abs_sub_lt_trans hi'1 hi'2
-    cnsimp only [(Rat.div_eq'_mul_inv · 8), ← Rat.mul_add, show 8⁻¹ + 8⁻¹ ~= (4⁻¹ : Rat) from rfl] at hi hi'
-    cnsimp only [← Rat.div_eq'_mul_inv] at hi hi'
+    cnsimp only [(div_eq_mul_inv · (8 : Rat)), ← Rat.mul_add, show 8⁻¹ + 8⁻¹ ~= (4⁻¹ : Rat) from rfl] at hi hi'
+    cnsimp only [← div_eq_mul_inv] at hi hi'
     exact PreReal.mul_rat_cond hε ha2 hb2 ha1 hb1 hi hi'
 
 theorem PreReal.mul_of_eq'_zero (x y : PreReal) (hy : y ~= 0) : x.mul y ~= 0 := by
   cnsimp only [eqv_def, seq_ofNat, Noncomputable.test_mk, Fun.apply_mkFun',
-    Rat.zero_sub, Rat.abs_neg] at hy ⊢
+    zero_sub, Rat.abs_neg] at hy ⊢
   dsimp only [mul]
   refine x.exists_gt_abs_seq.elim fun a ha => ?_
   have apos : 0 < a := by
@@ -565,45 +565,45 @@ theorem PreReal.mul_of_eq'_zero (x y : PreReal) (hy : y ~= 0) : x.mul y ~= 0 := 
   calc
     b.abs * c.abs < a * (ε / a) :=
       Rat.mul_lt_mul (Rat.abs_nonneg _) (Rat.abs_nonneg _) ha hi
-    _ ~= ε := Rat.mul_div_cancel (Rat.ne_of_gt apos)
+    _ ~= ε := mul_div_cancel (Rat.ne_of_gt apos) _
 
-theorem PreReal.mul_neg (x y : PreReal) : x.mul y.neg ~= (x.mul y).neg := by
+protected theorem PreReal.mul_neg (x y : PreReal) : x.mul y.neg ~= (x.mul y).neg := by
   apply eqv_of_seq_eq
   intro i
   dsimp [PreReal.mul, PreReal.neg]
   refine (x.seq i).elim fun a ha => ?_
   refine (y.seq i).elim fun b hb => ?_
   cnsimp only [ha, hb, Noncomputable.bind_mk, Noncomputable.map_mk, seq_ofNat, Fun.apply_mkFun',
-    Noncomputable.mk_inj, Rat.mul_neg, eq'_self_iff]
+    Noncomputable.mk_inj, mul_neg, eq'_self_iff]
 
-theorem PreReal.mul_zero (x : PreReal) : x.mul 0 ~= 0 := by
+protected theorem PreReal.mul_zero (x : PreReal) : x.mul 0 ~= 0 := by
   apply eqv_of_seq_eq
   intro i
   dsimp [PreReal.mul]
   refine (x.seq i).elim fun a ha => ?_
   cnsimp only [ha, Noncomputable.bind_mk, Noncomputable.map_mk, seq_ofNat, Fun.apply_mkFun',
     Noncomputable.mk_inj]
-  exact Rat.mul_zero a
+  exact mul_zero a
 
-theorem PreReal.mul_one (x : PreReal) : x.mul 1 ~= x := by
+protected theorem PreReal.mul_one (x : PreReal) : x.mul 1 ~= x := by
   apply eqv_of_seq_eq
   intro i
   dsimp [PreReal.mul]
   refine (x.seq i).elim fun a ha => ?_
   cnsimp only [ha, Noncomputable.bind_mk, Noncomputable.map_mk, seq_ofNat, Fun.apply_mkFun',
     Noncomputable.mk_inj]
-  exact Rat.mul_one a
+  exact mul_one a
 
-theorem PreReal.mul_comm (x y : PreReal) : x.mul y ~= y.mul x := by
+protected theorem PreReal.mul_comm (x y : PreReal) : x.mul y ~= y.mul x := by
   apply eqv_of_seq_eq
   intro i
   dsimp [PreReal.mul]
   refine (x.seq i).elim fun a ha => ?_
   refine (y.seq i).elim fun b hb => ?_
   cnsimp only [ha, hb, Noncomputable.bind_mk, Noncomputable.map_mk, Fun.apply_mkFun',
-    Rat.mul_comm a, eq'_self_iff]
+    mul_comm a, eq'_self_iff]
 
-theorem PreReal.mul_assoc (x y z : PreReal) : (x.mul y).mul z ~= x.mul (y.mul z) := by
+protected theorem PreReal.mul_assoc (x y z : PreReal) : (x.mul y).mul z ~= x.mul (y.mul z) := by
   apply eqv_of_seq_eq
   intro i
   dsimp [PreReal.mul]
@@ -611,7 +611,7 @@ theorem PreReal.mul_assoc (x y z : PreReal) : (x.mul y).mul z ~= x.mul (y.mul z)
   refine (y.seq i).elim fun b hb => ?_
   refine (z.seq i).elim fun c hc => ?_
   cnsimp only [ha, hb, hc, Noncomputable.bind_mk, Noncomputable.map_mk, Fun.apply_mkFun',
-    Rat.mul_assoc, eq'_self_iff]
+    mul_assoc, eq'_self_iff]
 
 -- returns the index of the smallest index `≤ i` for which `p` holds or `none`.
 def Nat.minRanged (p : Nat → Prop) (i : Nat) : Noncomputable (Option Nat) :=
@@ -768,7 +768,7 @@ theorem PreReal.pos_trichotomy (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos 
   cnsimp only [eqv_def]
   apply or'_iff_not_imp.mpr
   cnsimp only [not_forall_iff_exists', not_implies, not_exists', seq_ofNat,
-    Noncomputable.test_mk, Fun.apply_mkFun', Rat.zero_sub, Rat.abs_neg]
+    Noncomputable.test_mk, Fun.apply_mkFun', zero_sub, Rat.abs_neg]
   intro h
   refine h.elim fun ε hε => ?_
   clear h
@@ -807,9 +807,9 @@ theorem PreReal.pos_trichotomy (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos 
   have h := Rat.abs_sub_lt_trans hi1 hi2
   have h' := Rat.abs_sub_lt_trans hi1 hi3
   have : ε / 4 + ε / 4 ~= ε / 2 := by
-    cnsimp only [Rat.div_eq'_mul_inv, ← Rat.mul_add, show 4⁻¹ + 4⁻¹ ~= (2⁻¹ : Rat) from rfl]
+    cnsimp only [div_eq_mul_inv, ← Rat.mul_add, show 4⁻¹ + 4⁻¹ ~= (2⁻¹ : Rat) from rfl]
     rfl
-  cnsimp only [Rat.abs_lt, Rat.neg_sub, this] at h h'
+  cnsimp only [Rat.abs_lt, neg_sub, this] at h h'
   cnsimp only [Rat.le_abs] at hj
   refine hj.elim (fun hj => ?_) (fun hj => ?_)
   · cnsimp only [Rat.sub_lt_iff_lt_add] at h h'
@@ -819,8 +819,8 @@ theorem PreReal.pos_trichotomy (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos 
       _ < ε / 2 + b' := h.2
       _ ≤ ε / 2 + ε / 2 := Rat.add_le_add_left hj'
       _ ~= ε := Rat.half_add_half ε
-  · cnsimp only [Rat.sub_eq'_add_neg, Rat.add_comm b''] at h'
-    cnsimp only [← Rat.lt_sub_iff_add_lt, Rat.sub_eq'_add_neg] at h'
+  · cnsimp only [sub_eq_add_neg, add_comm b''] at h'
+    cnsimp only [← Rat.lt_sub_iff_add_lt, sub_eq_add_neg] at h'
     apply Rat.lt_irrefl ε
     calc
       ε ≤ -b := hj
@@ -828,7 +828,7 @@ theorem PreReal.pos_trichotomy (x : PreReal) : x ~= 0 ∨' x.pos ∨' x.neg.pos 
       _ ≤ ε / 2 + ε / 2 := Rat.add_le_add_left hj''
       _ ~= ε := Rat.half_add_half ε
 
-theorem PreReal.not_zero_pos : ¬(0 : PreReal).pos := by
+protected theorem PreReal.not_zero_pos : ¬(0 : PreReal).pos := by
   intro h
   dsimp only [pos] at h
   refine h.elim fun ε hε => ?_
@@ -837,14 +837,14 @@ theorem PreReal.not_zero_pos : ¬(0 : PreReal).pos := by
   cnsimp only [PreReal.seq_ofNat, Noncomputable.test_mk, Fun.apply_mkFun'] at hi
   exact Rat.lt_asymm hε.1 hi
 
-theorem PreReal.one_pos : (1 : PreReal).pos := by
+protected theorem PreReal.one_pos : (1 : PreReal).pos := by
   dsimp only [pos]
   refine .intro (1 / 2) ⟨by decide, ?_⟩
   refine .intro 0 fun j hj => ?_
   cnsimp; decide
 
-theorem PreReal.add_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.add y).pos := by
-  dsimp [pos, add] at hx hy ⊢
+protected theorem PreReal.add_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.add y).pos := by
+  dsimp [pos, PreReal.add] at hx hy ⊢
   refine hx.elim fun ε hε => ?_
   refine hy.elim fun ε' hε' => ?_
   refine .intro (ε + ε') ⟨Rat.add_pos hε.1 hε'.1, ?_⟩
@@ -860,8 +860,8 @@ theorem PreReal.add_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.add y).po
     Noncomputable.test_mk] at hi hi' ⊢
   exact Rat.add_lt_add hi hi'
 
-theorem PreReal.mul_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.mul y).pos := by
-  dsimp [pos, mul] at hx hy ⊢
+protected theorem PreReal.mul_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.mul y).pos := by
+  dsimp [pos, PreReal.mul] at hx hy ⊢
   refine hx.elim fun ε hε => ?_
   refine hy.elim fun ε' hε' => ?_
   refine .intro (ε * ε') ⟨Rat.mul_pos hε.1 hε'.1, ?_⟩
@@ -877,14 +877,14 @@ theorem PreReal.mul_pos {x y : PreReal} (hx : x.pos) (hy : y.pos) : (x.mul y).po
     Fun.apply_mkFun', Noncomputable.test_mk] at hi hi' ⊢
   exact Rat.mul_lt_mul (Rat.le_of_lt hε.1) (Rat.le_of_lt hε'.1) hi hi'
 
-theorem PreReal.mul_add (x y z : PreReal) : x.mul (y.add z) ~= (x.mul y).add (x.mul z) := by
+protected theorem PreReal.mul_add (x y z : PreReal) : x.mul (y.add z) ~= (x.mul y).add (x.mul z) := by
   apply eqv_of_seq_eq
   intro i
-  dsimp only [mul, add]
+  dsimp only [mul, PreReal.add]
   refine (x.seq i).elim fun a ha => ?_
   refine (y.seq i).elim fun b hb => ?_
   refine (z.seq i).elim fun c hc => ?_
-  cnsimp [ha, hb, hc, Rat.mul_add]
+  cnsimp [ha, hb, hc, mul_add]
 
 theorem PreReal.eq'_of_sub_eq'_zero {x y : PreReal} (h : x.add y.neg ~= 0) : x ~= y := by
   calc
@@ -894,7 +894,7 @@ theorem PreReal.eq'_of_sub_eq'_zero {x y : PreReal} (h : x.add y.neg ~= 0) : x ~
     _ ~= y := by cnsimp only [h, PreReal.add_comm 0, PreReal.add_zero, eq'_self_iff]
 
 @[ccongr]
-theorem PreReal.mul_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
+protected theorem PreReal.mul_congr {x₁ x₂ y₁ y₂ : PreReal} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁.mul y₁ ~= x₂.mul y₂ := by
   have xdiff : x₁.add x₂.neg ~= 0 := by
     cnsimp only [hx, PreReal.add_neg, eq'_self_iff]

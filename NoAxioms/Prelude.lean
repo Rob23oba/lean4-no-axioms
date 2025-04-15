@@ -1,6 +1,8 @@
 import NoAxioms.Tactic.TacticTesting
 import NoAxioms.Tactic.CCongrTactic
+import NoAxioms.Tactic.AxiomLinter
 
+set_option linter.noAxioms false in
 elab "count_heartbeats" x:tactic : tactic => do
   let heartbeats ← IO.getNumHeartbeats
   Lean.Elab.Tactic.evalTactic x
@@ -34,6 +36,7 @@ def Or' (p q : Prop) := ¬(¬p ∧ ¬q)
 def Exists' {α : Sort u} (β : α → Prop) := ¬∀ x, ¬β x
 
 infixr:30 " ∨' "  => Or'
+set_option linter.noAxioms false in
 macro "∃'" xs:Lean.explicitBinders ", " b:term : term => return ⟨← Lean.expandExplicitBinders ``Exists' xs b⟩
 
 @[app_unexpander Exists'] def unexpandExists' : Lean.PrettyPrinter.Unexpander
@@ -98,6 +101,8 @@ theorem DNE.byCases {p q : Prop} [DNE q] (h : p → q) (h' : ¬p → q) : q :=
 attribute [ccongr] and_congr
 attribute [ccongr] not_congr
 
+abbrev Iff.not := @not_congr
+
 @[ccongr]
 theorem iff_congr' {p₁ p₂ q₁ q₂} (hp : p₁ ↔ p₂) (hq : q₁ ↔ q₂) : (p₁ ↔ q₁) ↔ (p₂ ↔ q₂) := by
   constructor
@@ -118,7 +123,7 @@ theorem or'_false [DNE p] : p ∨' False ↔ p := by
     exact .inl h
 
 theorem or'_comm : p ∨' q ↔ q ∨' p :=
-  not_congr and_comm
+  and_comm.not
 
 @[cnsimp]
 theorem false_or' [DNE p] : False ∨' p ↔ p :=
@@ -138,11 +143,11 @@ theorem true_or' : True ∨' p ↔ True :=
 
 @[ccongr]
 theorem or'_congr (h₁ : p₁ ↔ p₂) (h₂ : q₁ ↔ q₂) : p₁ ∨' q₁ ↔ p₂ ∨' q₂ :=
-  not_congr (and_congr (not_congr h₁) (not_congr h₂))
+  (and_congr h₁.not h₂.not).not
 
 @[ccongr]
 theorem exists'_congr {β₁ β₂ : α → Prop} (h : ∀ x, β₁ x ↔ β₂ x) : (∃' x, β₁ x) ↔ ∃' x, β₂ x :=
-  not_congr (forall_congr' (fun x => not_congr (h x)))
+  (forall_congr' (fun x => (h x).not)).not
 
 @[cnsimp]
 theorem exists'_false : (∃' _ : α, False) ↔ False := by
@@ -314,6 +319,8 @@ theorem Eq'.refl [Eqv α] (x : α) : x ~= x := Eqv.refl x
 @[symm] theorem Eq'.symm [Eqv α] {x y : α} (h : x ~= y) : y ~= x := Eqv.symm h
 theorem Eq'.trans [Eqv α] {x y z : α} (h₁ : x ~= y) (h₂ : y ~= z) : x ~= z := Eqv.trans h₁ h₂
 
+theorem eq'_comm [Eqv α] {x y : α} : x ~= y ↔ y ~= x := ⟨Eq'.symm, Eq'.symm⟩
+
 @[symm] theorem Ne'.symm [Eqv α] {x y : α} (h : x ~!= y) : y ~!= x := mt Eq'.symm h
 
 instance [Eqv α] : @Trans α α α (· ~= ·) (· ~= ·) (· ~= ·) := ⟨Eq'.trans⟩
@@ -350,6 +357,7 @@ structure Fun (α : Sort u) (β : Sort v) [Eqv α] [Eqv β] where
   toFn : α → β
   congr {x y} (h : x ~= y) : toFn x ~= toFn y
 
+set_option linter.noAxioms false in
 run_elab
   Lean.Meta.registerCoercion ``Fun.toFn
     (some { numArgs := 5, coercee := 4, type := .coeFun })
@@ -418,6 +426,9 @@ macro:arg "fun'" x:ident " : " t:term " => " b:term : term => `(Fun.mkFun' (fun 
 
 macro "by_cases'" h:ident " : " t:term : tactic =>
   `(tactic| refine DNE.byCases (fun $h : $t => ?_) (fun $h => ?_))
+
+macro "by_contra'" h:ident : tactic =>
+  `(tactic| refine DNE.dne fun $h => ?_)
 
 def Noncomputable (α : Sort u) [Eqv α] := { x : α → Prop' // ∃' y, ∀ z, x z ↔ z ~= y }
 def Noncomputable.mk [Eqv α] (x : α) : Noncomputable α := ⟨fun z => z ~= x, .intro x fun _ => .rfl⟩

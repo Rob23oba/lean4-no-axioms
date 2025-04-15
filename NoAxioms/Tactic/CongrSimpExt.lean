@@ -622,7 +622,9 @@ def mkSimpTheoremConst (c : Name) (post : Bool := true) (inv : Bool := false) : 
   let some val := (← getEnv).findConstVal? c | throwError "unknown constant '{c}'"
   let type := val.type
   if inv then
-    let proof : Expr := .const c (val.levelParams.map Level.param)
+    let levels ← mkFreshLevelMVars val.levelParams.length
+    let proof : Expr := .const c levels
+    let type := type.instantiateLevelParams val.levelParams levels
     let origin := .decl c post inv
     (← preprocess proof type true).mapM (fun (proof, type) => do
       let (_, _, e) ← forallMetaTelescopeReducing type

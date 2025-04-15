@@ -1,4 +1,4 @@
-import NoAxioms.Prelude
+import NoAxioms.Ring
 
 theorem Nat.mul_assoc' (a b c : Nat) : a * b * c = a * (b * c) := by
   induction b with
@@ -605,7 +605,6 @@ protected def Rat.mul : Rat → Rat → Rat
 
 instance : Mul Rat := ⟨Rat.mul⟩
 
-@[ccongr]
 theorem Rat.mul_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ * y₁ ~= x₂ * y₂ := by
   change x₁.mul y₁ ~= x₂.mul y₂
@@ -615,6 +614,9 @@ theorem Rat.mul_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁
   rw [Int.ofNat_mul, Int.ofNat_mul, ← Int.mul_assoc', ← Int.mul_assoc']
   rw [Int.mul_right_comm' _ y₁.num, hx, Int.mul_assoc', hy, ← Int.mul_assoc']
   rw [Int.mul_right_comm' _ x₁.den]
+
+instance : MulCongr Rat where
+  mul_congr := Rat.mul_congr
 
 def Rat.divInt : Int → Int → Rat
   | a, (b + 1 : Nat) => ⟨a, b + 1, Nat.noConfusion⟩
@@ -626,12 +628,14 @@ protected def Rat.neg : Rat → Rat
 
 instance : Neg Rat := ⟨Rat.neg⟩
 
-@[ccongr]
 theorem Rat.neg_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : -x₁ ~= -x₂ := by
   dsimp [Neg.neg]
   cnsimp [eqv_def] at hx ⊢
   dsimp [Rat.neg]
   rw [Int.neg_mul', hx, Int.neg_mul']
+
+instance : NegCongr Rat where
+  neg_congr := Rat.neg_congr
 
 @[cnsimp]
 theorem Rat.neg_neg (x : Rat) : -(-x) ~= x := by
@@ -725,14 +729,6 @@ theorem Rat.mul_divInt_mul_left {x y z : Int} (h : x ≠ 0) : divInt (x * y) (x 
 
 protected def Rat.inv : Rat → Rat
   | ⟨a, b, _⟩ => divInt b a
-
-class Inv (α : Type u) [Eqv α] where
-  inv : α → α
-  inv_congr : ∀ {x y}, x ~= y → inv x ~= inv y
-
-postfix:max "⁻¹" => Inv.inv
-
-attribute [ccongr] Inv.inv_congr
 
 theorem Rat.inv_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.inv ~= x₂.inv := by
   dsimp [Rat.inv]
@@ -884,7 +880,6 @@ protected def Rat.add : Rat → Rat → Rat
 
 instance : Add Rat := ⟨Rat.add⟩
 
-@[ccongr]
 theorem Rat.add_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ + y₁ ~= x₂ + y₂ := by
   dsimp [· + ·, Add.add]
@@ -901,6 +896,9 @@ theorem Rat.add_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁
   rw [Int.mul_right_comm' _ _ y₂.den, hy, Int.mul_right_comm' _ _ x₂.den]
   rw [Int.mul_right_comm' _ _ x₂.den, Int.mul_right_comm' _ y₁.den x₁.den]
   rw [Int.mul_comm' y₂.num]
+
+instance : AddCongr Rat where
+  add_congr := Rat.add_congr
 
 @[cnsimp]
 theorem Rat.add_neg_cancel (x : Rat) : x + -x ~= 0 := by
@@ -1008,17 +1006,21 @@ protected def Rat.div (x y : Rat) := x * y⁻¹
 instance : Sub Rat := ⟨Rat.sub⟩
 instance : Div Rat := ⟨Rat.div⟩
 
-@[ccongr]
 theorem Rat.sub_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ - y₁ ~= x₂ - y₂ := by
   dsimp [· - ·, Sub.sub, Rat.sub]
   ccongr <;> assumption
 
-@[ccongr]
 theorem Rat.div_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ / y₁ ~= x₂ / y₂ := by
   dsimp [· / ·, Div.div, Rat.div]
   ccongr <;> assumption
+
+instance : SubCongr Rat where
+  sub_congr := Rat.sub_congr
+
+instance : DivCongr Rat where
+  div_congr := Rat.div_congr
 
 theorem Rat.sub_eq'_add_neg (x y : Rat) : x - y ~= x + -y := by rfl
 theorem Rat.div_eq'_mul_inv (x y : Rat) : x / y ~= x * y⁻¹ := by rfl
@@ -1297,7 +1299,6 @@ theorem Rat.le_of_not_le {x y : Rat} (h : ¬x ≤ y) : y ≤ x := by
   cnsimp only [Rat.le_def] at *
   exact Int.le_of_not_le' h
 
-@[ccongr]
 theorem Rat.le_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ ≤ y₁ ↔ x₂ ≤ y₂ := by
   constructor
@@ -1305,6 +1306,9 @@ theorem Rat.le_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ 
     exact le_of_le_of_eq' (le_of_eq'_of_le hx.symm h) hy
   · intro h
     exact le_of_le_of_eq' (le_of_eq'_of_le hx h) hy.symm
+
+instance : LECongr Rat where
+  le_congr := Rat.le_congr
 
 theorem Int.add_le_add_right' {a b c : Int} (h : a ≤ b) : a + c ≤ b + c := by
   cnsimp only [Int.le_def, Int.nonneg_def] at h ⊢
@@ -1414,10 +1418,12 @@ theorem Rat.lt_of_eq'_of_lt {x y z : Rat} (h : x ~= y) (h' : y < z) : x < z := b
 theorem Rat.lt_of_lt_of_eq' {x y z : Rat} (h : x < y) (h' : y ~= z) : x < z := by
   exact Rat.lt_of_lt_of_le h (Rat.le_of_eq' h')
 
-@[ccongr]
 theorem Rat.lt_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ < y₁ ↔ x₂ < y₂ := by
   cnsimp only [← Rat.not_le, hx, hy, iff_self_iff_true]
+
+instance : LTCongr Rat where
+  lt_congr := Rat.lt_congr
 
 theorem Rat.lt_trans {x y z : Rat} (h : x < y) (h' : y < z) : x < z := by
   exact Rat.lt_of_lt_of_le h (Rat.le_of_lt h')

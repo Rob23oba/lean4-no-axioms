@@ -61,42 +61,6 @@ export LTCongr (lt_congr gt_congr)
 attribute [ccongr] add_congr sub_congr mul_congr div_congr
   neg_congr inv_congr le_congr lt_congr
 
-instance : AddCongr Nat where
-  add_congr h h' := h ▸ h' ▸ rfl
-
-instance : SubCongr Nat where
-  sub_congr h h' := h ▸ h' ▸ rfl
-
-instance : MulCongr Nat where
-  mul_congr h h' := h ▸ h' ▸ rfl
-
-instance : DivCongr Nat where
-  div_congr h h' := h ▸ h' ▸ rfl
-
-instance : LECongr Nat where
-  le_congr h h' := h ▸ h' ▸ .rfl
-
-instance : LTCongr Nat where
-  lt_congr h h' := h ▸ h' ▸ .rfl
-
-instance : AddCongr Int where
-  add_congr h h' := h ▸ h' ▸ rfl
-
-instance : SubCongr Int where
-  sub_congr h h' := h ▸ h' ▸ rfl
-
-instance : MulCongr Int where
-  mul_congr h h' := h ▸ h' ▸ rfl
-
-instance : DivCongr Int where
-  div_congr h h' := h ▸ h' ▸ rfl
-
-instance : LECongr Int where
-  le_congr h h' := h ▸ h' ▸ .rfl
-
-instance : LTCongr Int where
-  lt_congr h h' := h ▸ h' ▸ .rfl
-
 @[ccongr]
 theorem Nat.cast_congr {α : Type u} [Eqv α] [NatCast α] {n₁ n₂ : Nat} (hn : n₁ ~= n₂) :
     (n₁ : α) ~= (n₂ : α) := by
@@ -417,6 +381,28 @@ theorem add_left_inj {_ : Eqv α} [AddGroup α] {x y : α} (z : α) :
     x + z ~= y + z ↔ x ~= y :=
   add_right_cancel_iff
 
+theorem eq_of_div_eq_one {_ : Eqv α} [GroupWithZero α] {x y : α} (h : x / y ~= 1) : x ~= y := by
+  have : y ~!= 0 := by
+    intro h'
+    cnsimp only [h', div_zero] at h
+    exact zero_ne_one h
+  apply mul_right_cancel (z := y⁻¹) (inv_eq_zero_iff.not.mpr this)
+  cnsimp [← div_eq_mul_inv, h, div_self this]
+
+theorem eq_of_sub_eq_zero {_ : Eqv α} [AddGroup α] {x y : α} (h : x - y ~= 0) : x ~= y := by
+  apply add_right_cancel (z := -y)
+  cnsimp [← sub_eq_add_neg, h]
+
+theorem sub_eq_iff_eq_add {_ : Eqv α} [AddGroup α] {x y z : α} : x - y ~= z ↔ x ~= z + y := by
+  have : x - y ~= z  ↔ x - y + y ~= z + y := (add_left_inj y).symm
+  cnsimp at this
+  exact this
+
+theorem eq_sub_iff_add_eq {_ : Eqv α} [AddGroup α] {x y z : α} : x ~= y - z ↔ x + z ~= y := by
+  have : x ~= y - z ↔ x + z ~= y - z + z := (add_left_inj z).symm
+  cnsimp at this
+  exact this
+
 class CommMonoid (α : Type u) [Eqv α] extends Monoid α where
   mul_comm (x y : α) : x * y ~= y * x
 
@@ -485,16 +471,23 @@ theorem sub_sub {_ : Eqv α} [AddCommGroup α] (x y z : α) :
     x - y - z ~= x - (y + z) := by
   cnsimp [sub_eq_add_neg, add_assoc, add_comm (-y)]
 
+theorem sub_eq_iff_eq_add' {_ : Eqv α} [AddCommGroup α] {x y z : α} : x - y ~= z ↔ x ~= y + z := by
+  cnsimp only [add_comm y]
+  exact sub_eq_iff_eq_add
+
+@[cnsimp]
+theorem add_sub_add_cancel_right {_ : Eqv α} [AddCommGroup α] {x y z : α} :
+    (x + y) - (x + z) ~= y - z := by
+  cnsimp only [← sub_sub, add_sub_cancel_left, eq'_self_iff]
+
+@[cnsimp]
+theorem add_sub_add_cancel_left {_ : Eqv α} [AddCommGroup α] {x y z : α} :
+    (x + z) - (y + z) ~= x - y := by
+  cnsimp only [← sub_sub, sub_right_comm _ y, add_sub_cancel_right, eq'_self_iff]
+
 class AddMonoidWithOne (α : Type u) [Eqv α] extends NatCast α, AddMonoid α, One α where
   natCast_zero : natCast 0 ~= 0
   natCast_succ (n : Nat) : natCast (n + 1) ~= natCast n + 1
-
-instance : AddMonoidWithOne Nat where
-  add_zero := Nat.add_zero
-  zero_add := Nat.zero_add
-  add_assoc := Nat.add_assoc
-  natCast_zero := rfl
-  natCast_succ _ := rfl
 
 @[cnsimp]
 theorem Nat.cast_zero {_ : Eqv α} [AddMonoidWithOne α] : ((0 : Nat) : α) ~= 0 :=
@@ -513,7 +506,7 @@ theorem Nat.cast_one {_ : Eqv α} [AddMonoidWithOne α] :
 theorem Nat.cast_add {_ : Eqv α} [AddMonoidWithOne α] (x y : Nat) :
     ((x + y : Nat) : α) ~= (x + y : α) := by
   induction y with
-  | zero => cnsimp
+  | zero => dsimp; cnsimp
   | succ k ih =>
     dsimp only [Nat.add_succ]
     dsimp only [Nat.succ_eq_add_one]
@@ -537,28 +530,6 @@ theorem Nat.cast_ofNat {_ : Eqv α} [AddMonoidWithOne α] (n : Nat) [Nat.AtLeast
 class Semiring (α : Type u) [Eqv α] extends MonoidWithZero α, AddCommMonoid α, AddMonoidWithOne α where
   mul_add (x y z : α) : x * (y + z) ~= x * y + x * z
   add_mul (x y z : α) : (x + y) * z ~= x * z + y * z
-
-theorem Nat.mul_assoc' (a b c : Nat) : a * b * c = a * (b * c) := by
-  induction b with
-  | zero => rw [Nat.zero_mul, Nat.mul_zero, Nat.zero_mul]
-  | succ k ih =>
-    rw [Nat.mul_succ, Nat.succ_mul, Nat.mul_comm, Nat.mul_add, Nat.mul_comm, ih,
-      Nat.mul_add, Nat.mul_comm a c]
-
-instance : Semiring Nat where
-  mul_one := Nat.mul_one
-  one_mul := Nat.one_mul
-  mul_assoc := Nat.mul_assoc'
-  mul_zero := Nat.mul_zero
-  zero_mul := Nat.zero_mul
-  add_zero := Nat.add_zero
-  zero_add := Nat.zero_add
-  add_assoc := Nat.add_assoc
-  add_comm := Nat.add_comm
-  natCast_zero := rfl
-  natCast_succ _ := rfl
-  mul_add := Nat.mul_add
-  add_mul x y z := by rw [Nat.mul_comm _ z, Nat.mul_comm _ z, Nat.mul_comm _ z, Nat.mul_add]
 
 class Ring (α : Type u) [Eqv α] extends AddCommGroup α, Semiring α
 

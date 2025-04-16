@@ -380,20 +380,6 @@ theorem not_imp' [DNE p] [DNE q] : ¬(p → q) ↔ p ∧ ¬q := by
   · exact not_imp_of_and_not
 
 @[cnsimp]
-theorem not_forall {α : Type u} {p : α → Prop} [∀ x, DNE (p x)] : (¬∀ x, p x) ↔ ∃' x, ¬p x := by
-  unfold Exists'
-  cnsimp
-
-@[cnsimp]
-theorem not_exists' {α : Type u} {p : α → Prop} : (¬∃' x, p x) ↔ ∀ x, ¬p x := by
-  unfold Exists'
-  cnsimp only [not_not, iff_self_iff_true]
-
-@[cnsimp]
-theorem implies_true_iff (α : Sort u) : (α → True) ↔ True :=
-  iff_true_intro (fun _ => trivial)
-
-@[cnsimp]
 theorem forall_exists'_index {α : Sort u} {p : α → Prop} {q : (∃' a, p a) → Prop}
     [∀ h, DNE (q h)] : (∀ h : (∃' x, p x), q h) ↔ ∀ x (h : p x), q (.intro x h) := by
   constructor

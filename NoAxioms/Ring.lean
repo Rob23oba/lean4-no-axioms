@@ -569,3 +569,7 @@ theorem mul_sub [Eqv α] [Ring α] (x y z : α) : x * (y - z) ~= x * y - x * z :
 
 theorem sub_mul [Eqv α] [Ring α] (x y z : α) : (x - y) * z ~= x * z - y * z := by
   cnsimp [sub_eq_add_neg, add_mul]
+
+class Semifield (α : Type u) [Eqv α] extends CommSemiring α, GroupWithZero α
+
+class Field (α : Type u) [Eqv α] extends Semifield α, CommRing α

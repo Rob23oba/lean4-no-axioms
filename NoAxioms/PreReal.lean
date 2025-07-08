@@ -70,7 +70,6 @@ def PreReal.ofRat (x : Rat) : PreReal where
   isCauSeq ε hε := by
     refine .intro 0 ?_
     intro j hj
-    dsimp
     cnsimp only [Noncomputable.test_mk, Fun.apply_mkFun',
       sub_self, Rat.abs_of_nonneg (by decide : (0 : Rat) ≤ 0)]
     exact hε
@@ -117,7 +116,6 @@ protected def PreReal.add (x y : PreReal) : PreReal where
     have hi''' := hi' (max i i') (Nat.le_max_right' ..)
     specialize hi j hj.1
     specialize hi' j hj.2
-    dsimp
     refine (x.seq (max i i')).elim fun a₁ ha₁ => ?_
     refine (y.seq (max i i')).elim fun a₂ ha₂ => ?_
     refine (x.seq j).elim (fun a₃ ha₃ => ?_)
@@ -496,7 +494,6 @@ theorem PreReal.mul_rat_cond {a b e x y x' y' : Rat}
 def PreReal.mul (x y : PreReal) : PreReal where
   seq i := (x.seq i).bind fun' a => (y.seq i).map (fun' b => a * b)
   isCauSeq ε hε := by
-    dsimp
     refine x.exists_gt_abs_seq.elim fun a ha => ?_
     refine y.exists_gt_abs_seq.elim fun b hb => ?_
     have apos : 0 < a := by

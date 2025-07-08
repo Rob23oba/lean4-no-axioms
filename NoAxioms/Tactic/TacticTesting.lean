@@ -11,8 +11,12 @@ deriving instance Repr for Simp.Result
 
 structure State where
   cache : Std.HashMap (Expr × Expr) (Option Meta.Simp.Result) := ∅
+  usedSimps : Simp.UsedSimps := {}
 
 abbrev CnSimpM := StateRefT State $ ReaderT SimpTheorems MetaM
+
+def registerUsedSimp (x : Origin) : CnSimpM Unit := do
+  modifyThe State fun a => { a with usedSimps := a.usedSimps.insert x }
 
 mutual
 
@@ -97,6 +101,7 @@ partial def rewriteOne (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Meta.Sim
       continue
     let rhs ← instantiateMVars rhs
     trace[Meta.Tactic.simp.rewrite] m!"rewrite: {m.proof} to {rhs}"
+    registerUsedSimp m.origin
     return .visit {
       expr := rhs
       proof? := mkAppN proof newParams
@@ -425,8 +430,17 @@ open Elab Tactic
 
 open Parser Tactic
 
-syntax (name := cnsimpTac) "cnsimp" optConfig (discharger)? (&" only")?
+syntax (name := cnsimpTac) "cnsimp " optConfig (discharger)? (&" only")?
     (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")? (location)? : tactic
+
+syntax (name := cnsimpTraceTac) "cnsimp? " optConfig (discharger)? (&" only")?
+    (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")? (location)? : tactic
+
+syntax (name := cnsimpaTac) "cnsimpa " optConfig (discharger)? (&" only")?
+    (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")? (" using " term)? : tactic
+
+syntax (name := cnsimpaTraceTac) "cnsimpa? " optConfig (discharger)? (&" only")?
+    (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")? (" using " term)? : tactic
 
 def CnSimp.mkSimpTheoremCoreOther (origin : Origin) (e : Expr) (levelParams : Array Name) (proof : Expr) (post : Bool) (prio : Nat) (noIndexAtArgs : Bool) : MetaM SimpTheorem := do
   assert! origin != .fvar ⟨.anonymous⟩
@@ -455,41 +469,26 @@ def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) 
       return { thms with pre := thms.pre.insertCore thm.keys thm }
   return thms
 
-def CnSimp.addCnSimpLemmas (stx : Syntax) (thms : SimpTheorems) : TacticM SimpTheorems := do
-  if stx.isNone then
+def CnSimp.addCnSimpLemmas (args : TSyntaxArray [`Lean.Parser.Tactic.simpStar, `Lean.Parser.Tactic.simpErase, `Lean.Parser.Tactic.simpLemma]) (thms : SimpTheorems) : TacticM SimpTheorems := do
+  withMainContext do
+    let mut thms      := thms
+    let mut starArg   := false
+    for arg in args do
+      match arg with
+      | `(simpLemma| $x:simpLemma) =>
+        let post := !x matches `(simpLemma| ↓$[←]?$_)
+        let inv  := x matches `(simpLemma| $[$_]?←$_)
+        let term : Term := ⟨x.raw[2]⟩
+        match (← resolveSimpIdTheorem? ⟨term⟩) with
+        | some e@(.const _ _) =>
+          for thm in ← CnSimp.mkSimpTheoremConst e.constName! post inv do
+            thms := thms.addSimpTheorem thm
+        | _ =>
+          let name ← mkFreshId
+          let term ← elabTerm term none
+          thms ← addLocalSimpLemma thms term (.stx name arg) post inv
+      | _ => throwUnsupportedSyntax
     return thms
-  else
-    /-
-    syntax simpPre := "↓"
-    syntax simpPost := "↑"
-    syntax simpLemma := (simpPre <|> simpPost)? "← "? term
-
-    syntax simpErase := "-" ident
-    -/
-    let go := withMainContext do
-      let mut thms      := thms
-      let mut starArg   := false
-      for arg in stx[1].getSepArgs do
-        if arg.getKind == ``Lean.Parser.Tactic.simpLemma then
-          let post :=
-            if arg[0].isNone then
-              true
-            else
-              arg[0][0].getKind == ``Parser.Tactic.simpPost
-          let inv  := !arg[1].isNone
-          let term := arg[2]
-          match (← resolveSimpIdTheorem? ⟨term⟩) with
-          | some e@(.const _ _) =>
-            for thm in ← CnSimp.mkSimpTheoremConst e.constName! post inv do
-              thms := addSimpTheoremEntry thms thm
-          | _ =>
-            let name ← mkFreshId
-            let term ← elabTerm term none
-            thms ← addLocalSimpLemma thms term (.stx name arg) post inv
-        else
-          throwUnsupportedSyntax
-      return thms
-    go
 where
   resolveSimpIdTheorem? (simpArgTerm : Term) : TacticM (Option Expr) := do
     match simpArgTerm with
@@ -506,8 +505,7 @@ where
       else
         return none
 
-def applyCnSimpIffResult (goalType : Expr) (res : Simp.Result) : TacticM Unit := do
-  let goal ← getMainGoal
+def applyCnSimpIffResult (goal : MVarId) (goalType : Expr) (res : Simp.Result) : MetaM (List MVarId) := do
   let newGoal ← mkFreshExprMVar res.expr
   let step := match res.proof? with
     | none => mkApp2 (.const ``id [0]) res.expr newGoal
@@ -515,36 +513,136 @@ def applyCnSimpIffResult (goalType : Expr) (res : Simp.Result) : TacticM Unit :=
   goal.assign step
   if res.expr.isTrue then
     newGoal.mvarId!.assign (.const ``trivial [])
+    return []
   else
-    replaceMainGoal [newGoal.mvarId!]
+    return [newGoal.mvarId!]
 
-def applyCnSimpIffResultLocal (goalType : Expr) (fvar : FVarId) (res : Simp.Result) : TacticM Unit := do
-  let goal ← getMainGoal
+def applyCnSimpIffResultLocal (goal : MVarId) (goalType : Expr) (fvar : FVarId) (res : Simp.Result) : MetaM (List MVarId) := do
   let step := match res.proof? with
     | none => mkApp2 (.const ``id [0]) res.expr (.fvar fvar)
     | some val => mkApp4 (.const ``Iff.mp []) goalType res.expr val (.fvar fvar)
+  if res.expr.isFalse then
+    goal.assignFalseProof step
+    return []
   let res ← goal.replace fvar step res.expr
-  replaceMainGoal [res.mvarId]
+  return [res.mvarId]
 
-@[tactic cnsimpTac]
-def elabCnSimp : Tactic := fun stx => do
-  --let cfg := stx[1]
-  let only := stx[3]
+def suggestSimpOnly (state : CnSimp.State) (tk stx : Syntax) : MetaM Unit := do
+  let stx := stx.unsetTrailing
+  let stx ← mkSimpOnly stx state.usedSimps
+  let stx := stx.setArg 0 <|
+    match stx.getKind with
+    | ``cnsimpTraceTac => .atom .none "cnsimp"
+    | ``cnsimpaTraceTac => .atom .none "cnsimpa"
+    | _ => stx[0]
+  let stx := stx.setKind <|
+    match stx.getKind with
+    | ``cnsimpTraceTac => ``cnsimpTac
+    | ``cnsimpaTraceTac => ``cnsimpaTac
+    | k => k
+  TryThis.addSuggestion tk (⟨stx⟩ : TSyntax `tactic) (origSpan? := ← getRef)
+
+elab_rules : tactic | `(tactic| cnsimp $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
   let mut theorems : SimpTheorems := {}
   if only.isNone then
     theorems ← cnsimpExt.getTheorems
-  withMainContext <| withLocation (expandOptLocation stx[5])
+  withMainContext <| withLocation (loc?.elim (.targets #[] true) fun s => expandLocation s)
     (atLocal := fun f => do
-      let theorems ← CnSimp.addCnSimpLemmas stx[4] theorems
+      let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
       let goalType ← instantiateMVars (← f.getType)
       let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems
       let some step := step | throwError "cnsimp made no progress"
-      applyCnSimpIffResultLocal goalType f step)
+      liftMetaTactic (applyCnSimpIffResultLocal · goalType f step))
     (atTarget := do
-      let theorems ← CnSimp.addCnSimpLemmas stx[4] theorems
+      let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
       let goal ← getMainGoal
       let goalType ← instantiateMVars (← goal.getType)
       let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems
       let some step := step | throwError "cnsimp made no progress"
-      applyCnSimpIffResult goalType step)
+      liftMetaTactic (applyCnSimpIffResult · goalType step))
     (failed := fun _ => throwError "cnsimp made no progress")
+
+@[tactic cnsimpTraceTac]
+def evalCnSimpTrace : Tactic := fun stx =>
+  match stx with
+  | `(tactic| cnsimp?%$tk $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
+    let mut theorems : SimpTheorems := {}
+    if only.isNone then
+      theorems ← cnsimpExt.getTheorems
+    withMainContext <| withLocation (loc?.elim (.targets #[] true) fun s => expandLocation s)
+      (atLocal := fun f => do
+        let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
+        let goalType ← instantiateMVars (← f.getType)
+        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} theorems
+        let some step := step | throwError "cnsimp made no progress"
+        suggestSimpOnly state tk stx
+        liftMetaTactic (applyCnSimpIffResultLocal · goalType f step))
+      (atTarget := do
+        let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
+        let goal ← getMainGoal
+        let goalType ← instantiateMVars (← goal.getType)
+        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} theorems
+        let some step := step | throwError "cnsimp made no progress"
+        suggestSimpOnly state tk stx
+        liftMetaTactic (applyCnSimpIffResult · goalType step))
+      (failed := fun _ => throwError "cnsimp made no progress")
+  | _ => throwUnsupportedSyntax
+
+def evalCnSimpa (goal : MVarId) (expr? : Option Expr) : CnSimp.CnSimpM Unit := do
+  let goalType ← instantiateMVars (← goal.getType)
+  let step ← CnSimp.cnsimp (mkConst ``Iff) goalType
+  let mut goal := goal
+  if let some step := step then
+    let newGoal :: _ ← applyCnSimpIffResult goal goalType step |
+      logWarning "unused cnsimpa"
+      return
+    goal := newGoal
+  if let some expr := expr? then
+    let type ← inferType expr
+    let step ← CnSimp.cnsimp (mkConst ``Iff) type
+    let goalType ← goal.getType
+    let newType :=
+      match step with
+      | none => type
+      | some { expr, .. } => expr
+    unless ← isDefEq goalType newType do
+      let msg := MessageData.ofLazyM (es := #[goalType, newType]) do
+        let (a, b) ← addPPExplicitToExposeDiff goalType newType
+        return m!"type mismatch, target{indentExpr a}\nis not definitionally equivalent to{indentExpr b}"
+      throwTacticEx `cnsimpa goal msg
+    let proof :=
+      match step with
+      | none => expr
+      | some { proof? := none, .. } => expr
+      | some { proof? := some prf, .. } => mkApp4 (.const ``Iff.mp []) type newType prf expr
+    if newType.isFalse then
+      goal.assignFalseProof proof
+    else
+      goal.assign proof
+  else
+    goal.assumption
+
+elab_rules : tactic | `(tactic| cnsimpa $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+  let mut theorems : SimpTheorems := {}
+  if only.isNone then
+    theorems ← cnsimpExt.getTheorems
+  let goal ← getMainGoal
+  goal.withContext do
+    let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
+    let term ← term.mapM (fun a => elabTerm a none)
+    (evalCnSimpa goal term).run' {} theorems
+
+@[tactic cnsimpaTraceTac]
+def evalCnSimpaTrace : Tactic := fun stx =>
+  match stx with
+  | `(tactic| cnsimpa?%$tk $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+    let mut theorems : SimpTheorems := {}
+    if only.isNone then
+      theorems ← cnsimpExt.getTheorems
+    let goal ← getMainGoal
+    goal.withContext do
+      let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
+      let term ← term.mapM (fun a => elabTerm a none)
+      let ((), state) ← (evalCnSimpa goal term).run {} theorems
+      suggestSimpOnly state tk stx
+  | _ => throwUnsupportedSyntax

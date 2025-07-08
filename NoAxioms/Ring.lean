@@ -352,14 +352,14 @@ theorem add_right_cancel_iff {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α
     cnsimp [h]
 
 @[cnsimp]
-theorem add_right_inj {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] (x : α) {y z : α} :
-    x + y ~= x + z ↔ y ~= z :=
-  add_left_cancel_iff
-
-@[cnsimp]
 theorem add_left_inj {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] {x y : α} (z : α) :
     x + z ~= y + z ↔ x ~= y :=
   add_right_cancel_iff
+
+@[cnsimp]
+theorem add_right_inj {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] (x : α) {y z : α} :
+    x + y ~= x + z ↔ y ~= z :=
+  add_left_cancel_iff
 
 theorem mul_left_cancel {_ : Eqv α} [Mul α] [Zero α] [IsCancelMulWithZero α] {x y z : α}
     (hx : x ~!= 0) (h : x * y ~= x * z) : y ~= z :=

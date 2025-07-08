@@ -158,7 +158,7 @@ theorem Int.subNatNat_add_add_left (a b c : Nat) :
 theorem Int.negSucc_inj' {a b : Nat} : Int.negSucc a = .negSucc b ↔ a = b :=
   ⟨Int.negSucc.inj, fun h => h ▸ rfl⟩
 
-theorem Nat.succ_inj {a b : Nat} : a.succ = b.succ ↔ a = b :=
+theorem Nat.succ_inj'' {a b : Nat} : a.succ = b.succ ↔ a = b :=
   ⟨Nat.succ.inj, fun h => h ▸ rfl⟩
 
 theorem Int.subNatNat_eq_subNatNat {a b c d : Nat} :
@@ -181,14 +181,14 @@ theorem Int.subNatNat_eq_subNatNat {a b c d : Nat} :
       rw [Nat.add_assoc c, Nat.add_left_comm, ← Nat.add_assoc c, ← Nat.add_assoc c,
         ← Nat.add_assoc c, Nat.add_assoc (c + a)]
       refine Iff.trans ?_ Nat.add_left_cancel_iff'.symm
-      exact eq_comm.trans Nat.succ_inj.symm
+      exact eq_comm.trans Nat.succ_inj''.symm
 
 theorem Int.subNatNat_add_subNatNat (a b c d : Nat) :
     subNatNat a b + subNatNat c d = subNatNat (a + c) (b + d) := by
   refine subNatNat_ind (fun a b => ?_) (fun a b => ?_) a b
   · refine subNatNat_ind (fun c d => ?_) (fun c d => ?_) c d
     · rw [Nat.add_assoc, Nat.add_left_comm b, ← Nat.add_assoc, Int.subNatNat_add_left',
-        Int.ofNat_add]
+        Int.natCast_add]
     · rw [Int.ofNat_add_negSucc, ← Nat.add_assoc, ← Nat.add_assoc,
         Nat.add_right_comm, Nat.add_assoc (a + c), Int.subNatNat_add_add_left]
   · refine subNatNat_ind (fun c d => ?_) (fun c d => ?_) c d
@@ -228,7 +228,7 @@ theorem Int.subNatNat_mul_subNatNat (a b c d : Nat) :
   refine subNatNat_ind (fun a b => ?_) (fun a b => ?_) a b
   · refine subNatNat_ind (fun c d => ?_) (fun c d => ?_) c d
     · rw [Nat.add_mul', Nat.mul_add b, Nat.add_mul', Nat.add_right_comm,
-        ← Nat.add_assoc, ← Nat.add_assoc, Int.subNatNat_add_left', ofNat_mul]
+        ← Nat.add_assoc, ← Nat.add_assoc, Int.subNatNat_add_left', natCast_mul]
     · rw [ofNat_mul_negSucc, Nat.add_mul', Nat.add_mul', Nat.add_right_comm,
         Nat.add_assoc c, Nat.mul_add b, ← Nat.add_assoc, ← Nat.add_assoc,
         ← Nat.add_assoc, Int.subNatNat_add_right'']
@@ -239,7 +239,7 @@ theorem Int.subNatNat_mul_subNatNat (a b c d : Nat) :
     · rw [Nat.add_assoc c, Nat.mul_add, Nat.add_assoc a,
         Nat.add_mul' _ _ (d + 1), Nat.mul_add a c, Nat.add_left_comm,
         ← Nat.add_assoc, ← Nat.add_assoc, ← Nat.add_assoc (_ * _),
-        Int.subNatNat_add_left', Int.negSucc_mul_negSucc, Int.ofNat_mul]
+        Int.subNatNat_add_left', Int.negSucc_mul_negSucc, Int.natCast_mul]
 
 theorem Int.mul_comm' (a b : Int) : a * b = b * a := by
   induction a using Int.subNatNat_ind' with | subNatNat x y => ?_
@@ -279,7 +279,7 @@ theorem Int.mul_add' (a b c : Int) : a * (b + c) = a * b + a * c := by
   rw [Int.subNatNat_add_subNatNat, Int.subNatNat_mul_subNatNat]
   rw [Int.subNatNat_mul_subNatNat, Int.subNatNat_mul_subNatNat, Int.subNatNat_add_subNatNat]
   apply subNatNat_eq_subNatNat.mpr
-  simp only [Nat.add_mul', Nat.mul_add, ← Nat.mul_assoc', ← Nat.add_assoc]
+  simp only [Nat.mul_add, ← Nat.add_assoc]
   rw [Nat.add_right_comm _ (x * y'), Nat.add_right_comm _ (x * x'')]
 
 theorem Int.add_mul' (a b c : Int) : (a + b) * c = a * c + b * c := by

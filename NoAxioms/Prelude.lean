@@ -391,8 +391,7 @@ theorem Fun.mkFun'_congr.proof {α : Sort u} {β : Sort v} {_ : Eqv α} {_ : Eqv
     (h₁ : ∀ {x y : α}, x ~= y → f₁ x ~= f₁ y) :
     ∀ (x y : α), x ~= y → f₂ x ~= f₂ y := by
   intro x y h
-  cnsimp [← hf]
-  exact h₁ h
+  cnsimpa only [hf] using h₁ h
 
 @[ccongr]
 theorem Fun.mkFun'_congr {α : Sort u} {β : Sort v} {_ : Eqv α} {_ : Eqv β}
@@ -495,7 +494,7 @@ def Noncomputable.uniqueChoice' [Eqv α] (p : Noncomputable α ~> Prop') (h : �
     refine x.elim fun a ha => ?_
     refine .intro a fun y => ?_
     dsimp
-    cnsimp [ha] at hx
+    cnsimp only [ha] at hx
     constructor
     · intro h'
       exact Noncomputable.mk_inj.mp (hx.2 (mk y) h').symm

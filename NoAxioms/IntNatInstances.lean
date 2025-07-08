@@ -28,9 +28,10 @@ theorem Nat.mul_assoc' (a b c : Nat) : a * b * c = a * (b * c) := by
 theorem Nat.add_mul' (a b c : Nat) : (a + b) * c = a * c + b * c := by
   rw [Nat.mul_comm _ c, Nat.mul_comm _ c, Nat.mul_comm _ c, Nat.mul_add]
 
-instance : Semiring Nat where
+instance : CommSemiring Nat where
   mul_one := Nat.mul_one
   one_mul := Nat.one_mul
+  mul_comm := Nat.mul_comm
   mul_assoc := Nat.mul_assoc'
   mul_zero := Nat.mul_zero
   zero_mul := Nat.zero_mul
@@ -302,3 +303,66 @@ instance : CommRing Int where
   mul_add := Int.mul_add'
   add_mul := Int.add_mul'
   mul_comm := Int.mul_comm'
+
+theorem Nat.div.go_eq (y : Nat) (hy : 0 < y) (fuel x : Nat) (hfuel : x < fuel) :
+    Nat.div.go y hy fuel x hfuel = x / y := by
+  induction fuel using Nat.strongRecOn generalizing x with
+  | ind k ih =>
+    unfold go
+    rcases k with (_ | ⟨k⟩); contradiction
+    change _ = Nat.div _ _
+    dsimp
+    unfold Nat.div
+    rw [dif_pos hy]
+    conv => rhs; unfold go
+    apply dite_congr rfl
+    · intro h
+      rw [ih _ hfuel, ih _ (Nat.lt_succ_self _)]
+    · intro h
+      rfl
+
+theorem Nat.div_eq' (x y : Nat) : x / y = if 0 < y ∧ y ≤ x then (x - y) / y + 1 else 0 := by
+  change x.div y = _
+  unfold Nat.div
+  unfold Nat.div.go
+  split
+  · split
+    · rw [if_pos ⟨‹_›, ‹_›⟩, div.go_eq]
+    · rw [if_neg (fun h => absurd h.2 ‹_›)]
+  · rw [if_neg (fun h => absurd h.1 ‹_›)]
+
+theorem Nat.zero_div' (x : Nat) : 0 / x = 0 := by
+  rw [Nat.div_eq', if_neg]
+  intro ⟨h1, h2⟩
+  match x, h1, h2 with
+  | 0, _, _ => contradiction
+
+theorem Nat.add_sub_add_right' (n k m : Nat) : n + k - (m + k) = n - m := by
+  induction k with
+  | zero => rfl
+  | succ k ih => rw [Nat.add_succ, Nat.add_succ, Nat.succ_sub_succ, ih]
+
+theorem Nat.add_div_right' {x y : Nat} (hy : 0 < y) : (x + y) / y = x / y + 1 := by
+  rw [Nat.div_eq', if_pos]
+  · rw [Nat.add_sub_cancel_right']
+  · exact ⟨hy, le_add_left y x⟩
+
+theorem Nat.mul_div_cancel'' (a : Nat) {b : Nat} (hb : 0 < b) : a * b / b = a := by
+  induction a with
+  | zero => rw [Nat.zero_mul, Nat.zero_div']
+  | succ k ih => rw [Nat.succ_mul, Nat.add_div_right' hb, ih]
+
+theorem Nat.mul_right_cancel' {a b c : Nat} (hc : 0 < c) (h : a * c = b * c) : a = b := by
+  rw [← Nat.mul_div_cancel'' a hc, ← Nat.mul_div_cancel'' b hc, h]
+
+theorem Nat.mul_left_cancel' {a b c : Nat} (ha : 0 < a) (h : a * b = a * c) : b = c := by
+  rw [Nat.mul_comm a, Nat.mul_comm a] at h
+  exact Nat.mul_right_cancel' ha h
+
+instance : IsCancelAdd Nat where
+  add_left_cancel _ _ _ := Nat.add_left_cancel'
+  add_right_cancel _ _ _ := Nat.add_right_cancel'
+
+instance : IsCancelMulWithZero Nat where
+  mul_left_cancel _ _ _ h := Nat.mul_left_cancel' (Nat.pos_of_ne_zero h)
+  mul_right_cancel _ _ _ h := Nat.mul_right_cancel' (Nat.pos_of_ne_zero h)

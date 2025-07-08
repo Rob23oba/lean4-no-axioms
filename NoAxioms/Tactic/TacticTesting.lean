@@ -9,67 +9,80 @@ open CCongr
 
 deriving instance Repr for Simp.Result
 
+structure Config where
+  singlePass : Bool := false
+
+structure Context where
+  theorems : SimpTheorems
+  config : Config
+
 structure State where
-  cache : Std.HashMap (Expr × Expr) (Option Meta.Simp.Result) := ∅
+  cache : Std.HashMap (Expr × Expr) Meta.Simp.Result := ∅
   usedSimps : Simp.UsedSimps := {}
 
-abbrev CnSimpM := StateRefT State $ ReaderT SimpTheorems MetaM
+abbrev CnSimpM := StateRefT State $ ReaderT Context MetaM
 
 def registerUsedSimp (x : Origin) : CnSimpM Unit := do
   modifyThe State fun a => { a with usedSimps := a.usedSimps.insert x }
 
+def appendToFnName (e : Expr) (s : String) : Expr :=
+  match e with
+  | .app a b => e.updateApp! (appendToFnName a s) b
+  | .const nm us => .const (.str nm s) us
+  | e => e
+
+def reflApp (rel a : Expr) : Expr :=
+  mkApp (appendToFnName rel "refl") a
+
+def symmApp (rel a b h : Expr) : Expr :=
+  mkApp3 (appendToFnName rel "symm") a b h
+
+def transApp (rel a b c h h' : Expr) : Expr :=
+  mkApp5 (appendToFnName rel "trans") a b c h h'
+
+def mkTrans (rel expr : Expr) (res res' : Simp.Result) : Simp.Result :=
+  match res, res' with
+  | { proof? := none, .. }, step => step
+  | { proof? := some prf, .. }, { expr, proof? := none, .. } => { expr, proof? := some prf }
+  | { expr := expr1, proof? := some prf, .. }, { expr := expr2, proof? := some prf', .. } =>
+    { expr := expr2, proof? := some (transApp rel expr expr1 expr2 prf prf') }
+
 mutual
 
-partial def forallCongr (lhs : Expr) : CnSimpM (Option Meta.Simp.Result) := do
-  let .forallE nm t b bi := lhs | return none
-  let mut result := none
+partial def forallCongr (lhs : Expr) : CnSimpM Simp.Result := do
+  let .forallE nm t b bi := lhs | return { expr := lhs }
+  let mut lhs := lhs
+  let mut result : Simp.Result := { expr := t }
   let lvl ← getLevel t
   if lvl.isAlwaysZero then
     result ← cnsimp (mkConst ``Iff) t
-  forallBoundedTelescope lhs (some 1) fun fvars inner => do
+  withLocalDecl nm bi t fun var => do
+    let inner := b.instantiate1 var
     unless ← isProp inner do
-      return none
+      return { expr := lhs }
     let result2 ← cnsimp (mkConst ``Iff) inner
     match result, result2 with
-    | none, none => return none
-    | some { expr := t', proof? := pt, .. }, none =>
+    | { expr := t', proof? := pt, .. }, { expr := b', proof? := pb, .. } =>
+      let b'' := b'.abstract #[var]
       let repl := match pt with
         | none => mkApp2 (.const ``id [0]) t' (.bvar 0)
         | some pt => mkApp4 (.const ``Iff.mpr []) t t' pt (.bvar 0)
-      let newExpr : Expr := .forallE nm t' (b.instantiate1 repl) bi
-      let proof : Expr := match pt with
-        | none => .app (.const ``Iff.rfl []) newExpr
-        | some pt =>
-          mkApp4 (.const ``forall_prop_dom_congr []) t t' (.lam nm t b bi) pt
-      return some { expr := newExpr, proof? := some proof }
-    | none, some { expr := b', proof? := pb, .. } =>
-      let b'' := b'.abstract fvars
-      let newExpr : Expr := .forallE nm t b'' bi
-      let proof : Expr ← match pb with
-        | none => pure (.app (.const ``Iff.rfl []) newExpr)
-        | some pb =>
-          pure (mkApp4 (.const ``forall_congr' [lvl]) t (.lam nm t b bi) (.lam nm t b'' bi) (← mkLambdaFVars fvars pb))
-      return some { expr := newExpr, proof? := some proof }
-    | some { expr := t', proof? := pt, .. }, some { expr := b', proof? := pb, .. } =>
-      let b'' := b'.abstract fvars
-      let repl := match pt with
-        | none => mkApp2 (.const ``id [0]) t' (.bvar 0)
-        | some pt => mkApp4 (.const ``Iff.mpr []) t t' pt (.bvar 0)
-      let b''' := b''.instantiate1 repl
+      let b''' := if t' != t then b''.instantiate1 repl else b''
       let newExpr : Expr := .forallE nm t' b''' bi
       let proof : Expr ← match pt, pb with
         | none, none => pure (.app (.const ``Iff.rfl []) newExpr)
         | none, some pb =>
-          pure (mkApp4 (.const ``forall_congr' [lvl]) t (.lam nm t b bi) (.lam nm t b'' bi) (← mkLambdaFVars fvars pb))
+          pure (mkApp4 (.const ``forall_congr' [lvl]) t (.lam nm t b bi) (.lam nm t b'' bi) (← mkLambdaFVars #[var] pb))
         | some pt, none =>
           pure (mkApp4 (.const ``forall_prop_dom_congr []) t t' (.lam nm t b bi) pt)
         | some pt, some pb =>
-          pure (mkApp6 (.const ``forall_prop_congr []) t t' (.lam nm t b bi) (.lam nm t b'' bi) pt (← mkLambdaFVars fvars pb))
-      return some { expr := newExpr, proof? := some proof }
+          pure (mkApp6 (.const ``forall_prop_congr []) t t' (.lam nm t b bi) (.lam nm t b'' bi) pt (← mkLambdaFVars #[var] pb))
+      return { expr := newExpr, proof? := some proof }
 
-partial def rewriteOne (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Meta.Simp.Step := do
+partial def rewriteOne (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Simp.Step := do
   trace[Meta.Tactic.simp.rewrite] m!"try to rewrite: {rel} {lhs} {pre}"
-  let thms ← readThe SimpTheorems
+  let ctx ← readThe Context
+  let thms := ctx.theorems
   let mut lhs := lhs
   let matchList ← (if pre then thms.pre else thms.post).getMatch lhs
   for m in matchList do
@@ -108,56 +121,32 @@ partial def rewriteOne (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Meta.Sim
     }
   return .continue
 
-partial def condenseSteps (steps : Array Expr) (rel expr : Expr) : CnSimpM Simp.Result := do
-  if steps.isEmpty then
-    return { expr := expr }
-  let relName := rel.getAppFn'.constName!
-  let mut proof := steps.back!
-  let mut steps := steps.pop
-  while !steps.isEmpty do
-    let proof' := steps.back!
-    proof ← mkAppM (.str relName "trans") #[proof', proof]
-    steps := steps.pop
-  return { expr := expr, proof? := proof }
-
 partial def rewriting (rel : Expr) (lhs : Expr) (pre : Bool) : CnSimpM Simp.Step := do
-  let relName := rel.getAppFn'.constName!
-  let mut proofSteps : Array Expr := #[]
+  let origLhs := lhs
+  let mut res : Simp.Result := { expr := lhs }
   let mut lhs := lhs
   let mut done := false
   repeat
     let step ← rewriteOne rel lhs pre
     match step with
-    | .visit { expr := expr, proof? := proof, cache := _ } =>
-      let proof ← match proof with
-        | some p => pure p
-        | none => mkAppM (.str relName "refl") #[expr]
-      proofSteps := proofSteps.push proof
-      lhs := expr
-      continue
-    | .continue none =>
+    | .visit res' =>
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
       break
-    | .continue (some { expr := expr, proof? := proof, cache := _ }) =>
-      let proof ← match proof with
-        | some p => pure p
-        | none => mkAppM (.str relName "refl") #[expr]
-      proofSteps := proofSteps.push proof
-      lhs := expr
-      continue
-    | .done { expr := expr, proof? := proof, cache := _ } =>
-      let proof ← match proof with
-        | some p => pure p
-        | none => mkAppM (.str relName "refl") #[expr]
-      proofSteps := proofSteps.push proof
-      lhs := expr
+    | .continue none =>
+      return .continue
+    | .continue (some res') =>
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
+      break
+    | .done res' =>
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
       done := true
       break
-  if proofSteps.isEmpty then
-    return .continue
-  let result ← condenseSteps proofSteps rel lhs
   if done then
-    return .done result
-  return .continue (some result)
+    return .done res
+  return .continue (some res)
 
 partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCongrProcedure) : CnSimpM (Option Meta.Simp.Result) := withReducible do
   let lhsArgs := lhs.getAppArgs'
@@ -170,6 +159,7 @@ partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCong
   let levels := lhs.getAppFn'.constLevels!
   let mut relSteps := #[]
   let mut madeProgress := false
+  let mut refl := true
   --trace[Meta.Tactic.simp.congr] m!"have params {reprPrec p.params 0}"
   for param in p.params do
     if let .rel rel' n := param then
@@ -178,7 +168,8 @@ partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCong
       let newLhs := lhsArgs[n]!
       trace[Meta.Tactic.simp.congr] m!"relation param {newRel} {newLhs}"
       let step ← cnsimp newRel newLhs
-      madeProgress := madeProgress || step.isSome
+      refl := refl && step.proof?.isNone
+      madeProgress := madeProgress || step.expr != newLhs
       relSteps := relSteps.push step
   unless madeProgress do
     trace[Meta.Tactic.simp.congr] m!"no progress for congruence with {c.thmName} in {lhs} {rel}"
@@ -194,10 +185,7 @@ partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCong
     | .rel _ i =>
       let step := relSteps[irel]!
       irel := irel + 1
-      match step with
-      | none => rhsArgs := rhsArgs.set! i lhsArgs[i]!
-      | some { expr := rhs, proof? := _, cache := _ } =>
-        rhsArgs := rhsArgs.set! i rhs
+      rhsArgs := rhsArgs.set! i step.expr
     | _ => pure ()
   let mut proofParams : Array Expr := Array.emptyWithCapacity p.params.size
   irel := 0
@@ -225,19 +213,15 @@ partial def trySimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : SimpleCCong
         (fun n => match n with | .num _ n => levels[n]! | _ => none)
       rhsArgs := rhsArgs.setIfInBounds i disch
       proofParams := proofParams.push disch
-    | .rel rel' i =>
+    | .rel rel' _ =>
       let step := relSteps[irel]!
       irel := irel + 1
-      let relName := rel'.getAppFn'.constName!
-      match step with
-      | none => proofParams := proofParams.push (← mkAppM (.str relName "refl") #[lhsArgs[i]!])
-      | some { expr := rhs, proof? := proof?, cache := _ } =>
-        proofParams := proofParams.push (← proof?.getDM (mkAppM (.str relName "refl") #[rhs]))
+      proofParams := proofParams.push (step.proof?.getD (reflApp rel' step.expr))
     iparam := iparam + 1
   let rhs := mkAppN lhs.getAppFn' rhsArgs
   let proof : Expr := .const c.thmName lparams
   let proof := mkAppN proof proofParams
-  return some { expr := rhs, proof? := proof }
+  return some { expr := rhs, proof? := if refl then proof else none }
 
 partial def tryNewSimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : NewSimpleCongr) : CnSimpM (Option Meta.Simp.Result) := withReducible do
   let lhsArgs := lhs.getAppArgs'
@@ -248,17 +232,20 @@ partial def tryNewSimpleCongr (rel lhs : Expr) (c : CCongrTheorem) (p : NewSimpl
   let state ← traverseNewTypes lhs p.lhsArgsIterate state
   trace[Meta.Tactic.simp.congr] m!"state: {state}"
   let levels := lhs.getAppFn'.constLevels!
-  let some state ← doActions levels false state p.preActions | return none
-  let some state ← doActions levels true state p.postActions | return none
+  let some (refl, state) ← doActions levels false state p.preActions | return none
+  let some (_, state) ← doActions levels true state p.postActions | return none
   let rhs ← constructFromTypes lhs.getAppFn' p.rhsArgsIterate state
+  if refl then
+    return some { expr := rhs }
   let lparams := p.lparamsPerm.map (levels[·]!)
   let proof : Expr := .const c.thmName lparams
   let proof := mkAppN proof state
   return some { expr := rhs, proof? := proof }
 where
-  doActions (levels : List Level) (madeProgress : Bool) (state : Array Expr) (acts : Array CongrActionType) : CnSimpM (Option (Array Expr)) := do
+  doActions (levels : List Level) (madeProgress : Bool) (state : Array Expr) (acts : Array CongrActionType) : CnSimpM (Option (Bool × Array Expr)) := do
     let lfun (n : Name) : Option Level := match n with | .num _ n => levels[n]! | _ => none
     let mut state := state
+    let mut refl := true
     let mut madeProgress := madeProgress
     for act in acts do
       match act with
@@ -279,18 +266,13 @@ where
         state := state.set! i mvar
       | .rel i lhs rhs rel =>
         let rel := (rel.instantiate state).instantiateLevelParamsCore lfun
-        let relName := rel.getAppFn'.constName!
-        let step ← cnsimp rel state[lhs]!
-        match step with
-        | none =>
-          state := state.set! rhs state[lhs]!
-          state := state.set! i (← mkAppM (.str relName "refl") #[state[rhs]!])
-        | some { expr := e, proof? := proof?, cache := _ } =>
-          state := state.set! rhs e
-          state := state.set! i (← proof?.getDM (mkAppM (.str relName "refl") #[state[rhs]!]))
-          madeProgress := true
+        let step ← cnsimp (← instantiateMVars rel) state[lhs]!
+        state := state.set! rhs step.expr
+        state := state.set! i (step.proof?.getD (reflApp rel step.expr))
+        madeProgress := madeProgress || step.expr != state[lhs]!
+        refl := refl && step.proof?.isNone
     if madeProgress then
-      return some state
+      return some (refl, state)
     else
       return none
 
@@ -313,24 +295,15 @@ partial def tryCongr (rel lhs : Expr) (c : CCongrTheorem) (pos : Array Nat) : Cn
     let type ← goal.getType'
     let expr : Option (Expr × Bool) ← forallTelescope type fun fvars newType => do
       let mkApp2 rel' lhs' rhs' := newType | return none
-      let relName' := rel'.getAppFn'.constName!
       let step ← cnsimp rel' lhs'
-      let progress := step.isSome
-      let thing ←
-        match step with
-        | none => pure (lhs', ← mkAppM (.str relName' "refl") #[lhs'])
-        | some { expr := rhs, proof? := some proof, cache := _ } =>
-          pure (rhs, proof)
-        | some { expr := rhs, proof? := none, cache := _ } =>
-          pure (rhs, ← mkAppM (.str relName' "refl") #[rhs])
-      let ((rhs : Expr), proof) := thing
-      unless ← isDefEq rhs' rhs do
+      unless ← isDefEq rhs' step.expr do
         trace[Meta.Tactic.simp.congr] m!"inner congruence failed: failed to unify {rhs} and {rhs'}"
         return none
+      let proof := step.proof?.getD (reflApp rel' step.expr)
       let proof ← proof.abstractM fvars
       let proof ← fvars.foldrM (fun fvar proof =>
         return (.lam `x (← fvar.fvarId!.getType) proof .default)) proof
-      return some (proof, progress)
+      return some (proof, step.expr != lhs')
     let some (expr, progress) := expr | return none
     goal.assign expr
     madeProgress := madeProgress || progress
@@ -366,61 +339,47 @@ partial def doCongr (rel lhs : Expr) : CnSimpM (Option Meta.Simp.Result) := do
   return none
 
 -- creates a proof of `rel lhs rhs` where `rhs` is also returned.
-partial def cnsimp (rel : Expr) (lhs : Expr) : CnSimpM (Option Meta.Simp.Result) := withReducible do
+partial def cnsimp (rel : Expr) (lhs : Expr) : CnSimpM Simp.Result := withIncRecDepth <| withReducible do
   if let some result := (← getThe State).cache[(rel, lhs)]? then
     trace[Meta.Tactic.simp] m!"cached {reprPrec result 0} for {rel} {lhs}"
     return result
-  let mut proofSteps : Array Expr := #[]
-  let mut madeProgress := false
+  withTraceNode `Meta.Tactic.simp (fun _ => return m!"try simp {rel} {lhs}") do
+  let mut res : Simp.Result := { expr := lhs }
   let origLhs := lhs
   let mut lhs := lhs
   repeat
     let rwStep ← rewriting rel lhs (pre := true)
     match rwStep with
-    | .done { expr := expr, proof? := proof?, cache := _ } =>
-      lhs := expr
-      if let some proof := proof? then
-        proofSteps := proofSteps.push proof
-      madeProgress := true
+    | .done res' =>
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
       break
     | .visit _ => unreachable!
-    | .continue res =>
-    match res with
-    | none => pure ()
-    | some { expr := expr, proof? := proof?, cache := _ } =>
-      lhs := expr
-      if let some proof := proof? then
-        proofSteps := proofSteps.push proof
-      madeProgress := true
+    | .continue res' =>
+    if let some res' := res' then
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
     let cng ← doCongr rel lhs
-    match cng with
-    | none => pure ()
-    | some { expr := expr, proof? := proof?, cache := _ } =>
-      lhs := expr
-      if let some proof := proof? then
-        proofSteps := proofSteps.push proof
-      madeProgress := true
+    if let some res' := cng then
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
     let rwStep ← rewriting rel lhs (pre := false)
     match rwStep with
-    | .done { expr := expr, proof? := proof?, cache := _ } =>
-      lhs := expr
-      if let some proof := proof? then
-        proofSteps := proofSteps.push proof
-      madeProgress := true
+    | .done res' =>
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
       break
     | .visit _ => unreachable!
-    | .continue (some { expr := expr, proof? := proof?, cache := _ }) =>
+    | .continue (some res') =>
       let prev := lhs
-      lhs := expr
-      if let some proof := proof? then
-        proofSteps := proofSteps.push proof
-      madeProgress := true
-      if expr != prev then
+      res := mkTrans rel origLhs res res'
+      lhs := res'.expr
+      if res'.expr != prev && !(← read).config.singlePass then
         continue
+      break
     | _ => break
-  let result ← if madeProgress then pure <| some (← condenseSteps proofSteps rel lhs) else pure none
-  modifyThe State fun state => { state with cache := state.cache.insert (rel, origLhs) result }
-  return result
+  modifyThe State fun state => { state with cache := state.cache.insert (rel, origLhs) res }
+  return res
 
 end
 
@@ -442,6 +401,20 @@ syntax (name := cnsimpaTac) "cnsimpa " optConfig (discharger)? (&" only")?
 syntax (name := cnsimpaTraceTac) "cnsimpa? " optConfig (discharger)? (&" only")?
     (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")? (" using " term)? : tactic
 
+syntax (name := cnrwTac) "cnrw " optConfig (" [" withoutPosition(rwRule,*,?) "]")? (location)? : tactic
+
+macro_rules
+  | `(tactic| cnrw $cfg:configItem* $[[$rules,*]]? $(loc?)?) => do
+    let rules := rules.elim #[] (·.getElems)
+    let items : TSyntaxArray `tactic ←
+      rules.mapM fun stx =>
+        match stx with
+        | `(rwRule| ← $l:term) => `(tactic| cnsimp%$stx $cfg* +singlePass only [← $l:term] $(loc?)?)
+        | `(rwRule| $l:term) => `(tactic| cnsimp%$stx $cfg* +singlePass only [$l:term] $(loc?)?)
+        | _ => Macro.throwUnsupported
+    let items := items.push (← `(tactic| with_reducible try rfl))
+    `(tactic| ($[$items:tactic];*))
+
 def CnSimp.mkSimpTheoremCoreOther (origin : Origin) (e : Expr) (levelParams : Array Name) (proof : Expr) (post : Bool) (prio : Nat) (noIndexAtArgs : Bool) : MetaM SimpTheorem := do
   assert! origin != .fvar ⟨.anonymous⟩
   let type ← instantiateMVars (← inferType e)
@@ -456,13 +429,15 @@ def CnSimp.mkSimpTheoremCoreOther (origin : Origin) (e : Expr) (levelParams : Ar
     return { origin, keys, post, levelParams, proof, priority := prio, rfl := (← isRflProof proof) }
 
 def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) (post : Bool := true) (inv : Bool := false) : MetaM SimpTheorems := withReducible do
+  let mvars ← getMVars e
+  let e ← mkLambdaFVars (mvars.map Expr.mvar) e
   let type ← inferType e
   unless (← isProp type) do
     throwError "invalid 'cnsimp', proposition expected{indentExpr type}"
   let vers ← preprocess e type inv
   let mut thms := thms
   for (proof, _) in vers do
-    let thm ← mkSimpTheoremCoreOther origin proof #[] proof post (eval_prio default) true
+    let thm ← mkSimpTheoremCoreOther origin proof #[] proof post (eval_prio default) false
     if post then
       return { thms with post := thms.post.insertCore thm.keys thm }
     else
@@ -542,7 +517,10 @@ def suggestSimpOnly (state : CnSimp.State) (tk stx : Syntax) : MetaM Unit := do
     | k => k
   TryThis.addSuggestion tk (⟨stx⟩ : TSyntax `tactic) (origSpan? := ← getRef)
 
-elab_rules : tactic | `(tactic| cnsimp $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
+declare_config_elab elabCnSimpConfig CnSimp.Config
+
+elab_rules : tactic | `(tactic| cnsimp $cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
+  let config ← elabCnSimpConfig cfg
   let mut theorems : SimpTheorems := {}
   if only.isNone then
     theorems ← cnsimpExt.getTheorems
@@ -550,22 +528,25 @@ elab_rules : tactic | `(tactic| cnsimp $_cfg:optConfig $(_disch?)? $[only%$only]
     (atLocal := fun f => do
       let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
       let goalType ← instantiateMVars (← f.getType)
-      let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems
-      let some step := step | throwError "cnsimp made no progress"
+      let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} { theorems, config }
+      if step.expr == goalType then
+        throwError "cnsimp made no progress"
       liftMetaTactic (applyCnSimpIffResultLocal · goalType f step))
     (atTarget := do
       let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
       let goal ← getMainGoal
       let goalType ← instantiateMVars (← goal.getType)
-      let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} theorems
-      let some step := step | throwError "cnsimp made no progress"
+      let step ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run' {} { theorems, config }
+      if step.expr == goalType then
+        throwError "cnsimp made no progress"
       liftMetaTactic (applyCnSimpIffResult · goalType step))
     (failed := fun _ => throwError "cnsimp made no progress")
 
 @[tactic cnsimpTraceTac]
 def evalCnSimpTrace : Tactic := fun stx =>
   match stx with
-  | `(tactic| cnsimp?%$tk $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
+  | `(tactic| cnsimp?%$tk $cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $(loc?)?) => do
+    let config ← elabCnSimpConfig cfg
     let mut theorems : SimpTheorems := {}
     if only.isNone then
       theorems ← cnsimpExt.getTheorems
@@ -573,16 +554,18 @@ def evalCnSimpTrace : Tactic := fun stx =>
       (atLocal := fun f => do
         let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
         let goalType ← instantiateMVars (← f.getType)
-        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} theorems
-        let some step := step | throwError "cnsimp made no progress"
+        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} { theorems, config }
+        if step.expr == goalType then
+          throwError "cnsimp made no progress"
         suggestSimpOnly state tk stx
         liftMetaTactic (applyCnSimpIffResultLocal · goalType f step))
       (atTarget := do
         let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
         let goal ← getMainGoal
         let goalType ← instantiateMVars (← goal.getType)
-        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} theorems
-        let some step := step | throwError "cnsimp made no progress"
+        let (step, state) ← (CnSimp.cnsimp (mkConst ``Iff) goalType).run {} { theorems, config }
+        if step.expr == goalType then
+          throwError "cnsimp made no progress"
         suggestSimpOnly state tk stx
         liftMetaTactic (applyCnSimpIffResult · goalType step))
       (failed := fun _ => throwError "cnsimp made no progress")
@@ -592,7 +575,7 @@ def evalCnSimpa (goal : MVarId) (expr? : Option Expr) : CnSimp.CnSimpM Unit := d
   let goalType ← instantiateMVars (← goal.getType)
   let step ← CnSimp.cnsimp (mkConst ``Iff) goalType
   let mut goal := goal
-  if let some step := step then
+  if step.expr != goalType then
     let newGoal :: _ ← applyCnSimpIffResult goal goalType step |
       logWarning "unused cnsimpa"
       return
@@ -601,10 +584,7 @@ def evalCnSimpa (goal : MVarId) (expr? : Option Expr) : CnSimp.CnSimpM Unit := d
     let type ← inferType expr
     let step ← CnSimp.cnsimp (mkConst ``Iff) type
     let goalType ← goal.getType
-    let newType :=
-      match step with
-      | none => type
-      | some { expr, .. } => expr
+    let newType := step.expr
     unless ← isDefEq goalType newType do
       let msg := MessageData.ofLazyM (es := #[goalType, newType]) do
         let (a, b) ← addPPExplicitToExposeDiff goalType newType
@@ -612,9 +592,8 @@ def evalCnSimpa (goal : MVarId) (expr? : Option Expr) : CnSimp.CnSimpM Unit := d
       throwTacticEx `cnsimpa goal msg
     let proof :=
       match step with
-      | none => expr
-      | some { proof? := none, .. } => expr
-      | some { proof? := some prf, .. } => mkApp4 (.const ``Iff.mp []) type newType prf expr
+      | { proof? := none, .. } => expr
+      | { proof? := some prf, .. } => mkApp4 (.const ``Iff.mp []) type newType prf expr
     if newType.isFalse then
       goal.assignFalseProof proof
     else
@@ -622,7 +601,8 @@ def evalCnSimpa (goal : MVarId) (expr? : Option Expr) : CnSimp.CnSimpM Unit := d
   else
     goal.assumption
 
-elab_rules : tactic | `(tactic| cnsimpa $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+elab_rules : tactic | `(tactic| cnsimpa $cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+  let config ← elabCnSimpConfig cfg
   let mut theorems : SimpTheorems := {}
   if only.isNone then
     theorems ← cnsimpExt.getTheorems
@@ -630,12 +610,13 @@ elab_rules : tactic | `(tactic| cnsimpa $_cfg:optConfig $(_disch?)? $[only%$only
   goal.withContext do
     let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
     let term ← term.mapM (fun a => elabTerm a none)
-    (evalCnSimpa goal term).run' {} theorems
+    (evalCnSimpa goal term).run' {} { theorems, config }
 
 @[tactic cnsimpaTraceTac]
 def evalCnSimpaTrace : Tactic := fun stx =>
   match stx with
-  | `(tactic| cnsimpa?%$tk $_cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+  | `(tactic| cnsimpa?%$tk $cfg:optConfig $(_disch?)? $[only%$only]? $[[$lemmas,*]]? $[using $term]?) => do
+    let config ← elabCnSimpConfig cfg
     let mut theorems : SimpTheorems := {}
     if only.isNone then
       theorems ← cnsimpExt.getTheorems
@@ -643,6 +624,6 @@ def evalCnSimpaTrace : Tactic := fun stx =>
     goal.withContext do
       let theorems ← CnSimp.addCnSimpLemmas (lemmas.elim #[] (·.getElems)) theorems
       let term ← term.mapM (fun a => elabTerm a none)
-      let ((), state) ← (evalCnSimpa goal term).run {} theorems
+      let ((), state) ← (evalCnSimpa goal term).run {} { theorems, config }
       suggestSimpOnly state tk stx
   | _ => throwUnsupportedSyntax

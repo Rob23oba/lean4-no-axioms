@@ -20,18 +20,8 @@ class DivCongr (α : Type u) [Eqv α] [Div α] extends HDivCongr α α
 class NegCongr (α : Type u) [Eqv α] [Neg α] where
   neg_congr {x₁ x₂ : α} (hx : x₁ ~= x₂) : -x₁ ~= -x₂
 
-class Inv (α : Type u) [Eqv α] where
-  inv : α → α
-  inv_congr : ∀ {x y}, x ~= y → inv x ~= inv y
-
-postfix:max "⁻¹" => Inv.inv
-
-/-- A type with a one element. -/
-class One (α : Type u) where
-  one : α
-
-instance One.toOfNat1 [One α] : OfNat α 1 := ⟨One.one⟩
-instance One.ofOfNat1 [OfNat α 1] : One α := ⟨1⟩
+class InvCongr (α : Type u) [Eqv α] [Inv α] where
+  inv_congr {x₁ x₂ : α} (hx : x₁ ~= x₂) : x₁⁻¹ ~= x₂⁻¹
 
 class LECongr (α : Type u) [Eqv α] [LE α] where
   le_congr {x₁ x₂ y₁ y₂ : α} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) : x₁ ≤ y₁ ↔ x₂ ≤ y₂
@@ -54,7 +44,7 @@ export HSubCongr (sub_congr)
 export HMulCongr (mul_congr)
 export HDivCongr (div_congr)
 export NegCongr (neg_congr)
-export Inv (inv_congr)
+export InvCongr (inv_congr)
 export LECongr (le_congr ge_congr)
 export LTCongr (lt_congr gt_congr)
 
@@ -97,7 +87,7 @@ theorem mul_assoc {_ : Eqv α} [Monoid α] (x y z : α) : x * y * z ~= x * (y * 
 theorem add_assoc {_ : Eqv α} [AddMonoid α] (x y z : α) : x + y + z ~= x + (y + z) :=
   AddMonoid.add_assoc x y z
 
-class DivInvMonoid (α : Type u) [Eqv α] extends Monoid α, Inv α, Div α, DivCongr α where
+class DivInvMonoid (α : Type u) [Eqv α] extends Monoid α, Inv α, Div α, InvCongr α, DivCongr α where
   div_eq_mul_inv (x y : α) : x / y ~= x * y⁻¹
 
 class SubNegMonoid (α : Type u) [Eqv α] extends AddMonoid α, Neg α, NegCongr α, Sub α, SubCongr α where
@@ -307,79 +297,99 @@ theorem neg_sub {_ : Eqv α} [AddGroup α] (x y : α) : -(x - y) ~= y - x := by
 theorem sub_neg {_ : Eqv α} [AddGroup α] (x y : α) : x - (-y) ~= x + y := by
   cnsimp [sub_eq_add_neg]
 
-theorem mul_right_cancel {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (hz : z ~!= 0) (h : x * z ~= y * z) : x ~= y := by
-  calc
-    x ~= x * z / z := by cnsimp [mul_div_cancel_right hz]
-    _ ~= y * z / z := by cnsimp [h]
-    _ ~= y := by cnsimp [mul_div_cancel_right hz]
+class IsCancelAdd (α : Type u) [Eqv α] [Add α] where
+  add_left_cancel (x y z : α) : x + y ~= x + z → y ~= z
+  add_right_cancel (x y z : α) : x + z ~= y + z → x ~= y
 
-theorem add_right_cancel {_ : Eqv α} [AddGroup α] {x y z : α}
-    (h : x + z ~= y + z) : x ~= y := by
-  calc
-    x ~= x + z - z := by cnsimp
-    _ ~= y + z - z := by cnsimp only [h, eq'_self_iff]
-    _ ~= y := by cnsimp
+class IsCancelMulWithZero (α : Type u) [Eqv α] [Mul α] [Zero α] where
+  mul_left_cancel (x y z : α) : x ~!= 0 → x * y ~= x * z → y ~= z
+  mul_right_cancel (x y z : α) : z ~!= 0 → x * z ~= y * z → x ~= y
 
-theorem mul_right_cancel_iff {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (h : z ~!= 0) : x * z ~= y * z ↔ x ~= y := by
-  constructor
-  · exact mul_right_cancel h
-  · intro h
-    cnsimp [h]
+instance [Eqv α] [GroupWithZero α] : IsCancelMulWithZero α where
+  mul_left_cancel x y z hx h := by
+    calc
+      y ~= x⁻¹ * x * y := by cnsimp [inv_mul_cancel hx]
+      _ ~= x⁻¹ * x * z := by cnsimp [mul_assoc, h]
+      _ ~= z := by cnsimp [inv_mul_cancel hx]
+  mul_right_cancel x y z hz h := by
+    calc
+      x ~= x * z / z := by cnsimp [mul_div_cancel_right hz]
+      _ ~= y * z / z := by cnsimp [h]
+      _ ~= y := by cnsimp [mul_div_cancel_right hz]
 
-theorem add_right_cancel_iff {_ : Eqv α} [AddGroup α] {x y z : α} :
-    x + z ~= y + z ↔ x ~= y := by
-  constructor
-  · exact add_right_cancel
-  · intro h
-    cnsimp [h]
+instance [Eqv α] [AddGroup α] : IsCancelAdd α where
+  add_left_cancel x y z h := by
+    calc
+      y ~= -x + x + y := by cnsimp
+      _ ~= -x + x + z := by cnsimp only [add_assoc, h, eq'_self_iff]
+      _ ~= z := by cnsimp
+  add_right_cancel x y z h := by
+    calc
+      x ~= x + z - z := by cnsimp
+      _ ~= y + z - z := by cnsimp only [h, eq'_self_iff]
+      _ ~= y := by cnsimp
 
-theorem mul_left_cancel {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (hx : x ~!= 0) (h : x * y ~= x * z) : y ~= z := by
-  calc
-    y ~= x⁻¹ * x * y := by cnsimp [inv_mul_cancel hx]
-    _ ~= x⁻¹ * x * z := by cnsimp [mul_assoc, h]
-    _ ~= z := by cnsimp [inv_mul_cancel hx]
+theorem add_left_cancel {_ : Eqv α} [Add α] [IsCancelAdd α] {x y z : α}
+    (h : x + y ~= x + z) : y ~= z :=
+  IsCancelAdd.add_left_cancel x y z h
 
-theorem add_left_cancel {_ : Eqv α} [AddGroup α] {x y z : α}
-    (h : x + y ~= x + z) : y ~= z := by
-  calc
-    y ~= -x + x + y := by cnsimp
-    _ ~= -x + x + z := by cnsimp only [add_assoc, h, eq'_self_iff]
-    _ ~= z := by cnsimp
+theorem add_right_cancel {_ : Eqv α} [Add α] [IsCancelAdd α] {x y z : α}
+    (h : x + z ~= y + z) : x ~= y :=
+  IsCancelAdd.add_right_cancel x y z h
 
-theorem mul_left_cancel_iff {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (h : x ~!= 0) : x * y ~= x * z ↔ y ~= z := by
-  constructor
-  · exact mul_left_cancel h
-  · intro h
-    cnsimp [h]
-
-theorem add_left_cancel_iff {_ : Eqv α} [AddGroup α] {x y z : α} :
+theorem add_left_cancel_iff {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] {x y z : α} :
     x + y ~= x + z ↔ y ~= z := by
   constructor
   · exact add_left_cancel
   · intro h
     cnsimp [h]
 
-theorem mul_right_inj {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (h : x ~!= 0) : x * y ~= x * z ↔ y ~= z :=
-  mul_left_cancel_iff h
+theorem add_right_cancel_iff {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] {x y z : α} :
+    x + z ~= y + z ↔ x ~= y := by
+  constructor
+  · exact add_right_cancel
+  · intro h
+    cnsimp [h]
 
 @[cnsimp]
-theorem add_right_inj {_ : Eqv α} [AddGroup α] (x : α) {y z : α} :
+theorem add_right_inj {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] (x : α) {y z : α} :
     x + y ~= x + z ↔ y ~= z :=
   add_left_cancel_iff
 
-theorem mul_left_inj {_ : Eqv α} [GroupWithZero α] {x y z : α}
-    (h : z ~!= 0) : x * z ~= y * z ↔ x ~= y :=
-  mul_right_cancel_iff h
-
 @[cnsimp]
-theorem add_left_inj {_ : Eqv α} [AddGroup α] {x y : α} (z : α) :
+theorem add_left_inj {_ : Eqv α} [Add α] [AddCongr α] [IsCancelAdd α] {x y : α} (z : α) :
     x + z ~= y + z ↔ x ~= y :=
   add_right_cancel_iff
+
+theorem mul_left_cancel {_ : Eqv α} [Mul α] [Zero α] [IsCancelMulWithZero α] {x y z : α}
+    (hx : x ~!= 0) (h : x * y ~= x * z) : y ~= z :=
+  IsCancelMulWithZero.mul_left_cancel x y z hx h
+
+theorem mul_right_cancel {_ : Eqv α} [Mul α] [Zero α] [IsCancelMulWithZero α] {x y z : α}
+    (hz : z ~!= 0) (h : x * z ~= y * z) : x ~= y :=
+  IsCancelMulWithZero.mul_right_cancel x y z hz h
+
+theorem mul_right_cancel_iff {_ : Eqv α} [Mul α] [Zero α] [MulCongr α] [IsCancelMulWithZero α]
+    {x y z : α} (h : z ~!= 0) : x * z ~= y * z ↔ x ~= y := by
+  constructor
+  · exact mul_right_cancel h
+  · intro h
+    cnsimp [h]
+
+theorem mul_left_cancel_iff {_ : Eqv α} [Mul α] [Zero α] [MulCongr α] [IsCancelMulWithZero α]
+    {x y z : α} (h : x ~!= 0) : x * y ~= x * z ↔ y ~= z := by
+  constructor
+  · exact mul_left_cancel h
+  · intro h
+    cnsimp [h]
+
+theorem mul_left_inj {_ : Eqv α} [Mul α] [Zero α] [MulCongr α] [IsCancelMulWithZero α]
+    {x y z : α} (h : z ~!= 0) : x * z ~= y * z ↔ x ~= y :=
+  mul_right_cancel_iff h
+
+theorem mul_right_inj {_ : Eqv α} [Mul α] [Zero α] [MulCongr α] [IsCancelMulWithZero α]
+    {x y z : α} (h : x ~!= 0) : x * y ~= x * z ↔ y ~= z :=
+  mul_left_cancel_iff h
 
 theorem eq_of_div_eq_one {_ : Eqv α} [GroupWithZero α] {x y : α} (h : x / y ~= 1) : x ~= y := by
   have : y ~!= 0 := by

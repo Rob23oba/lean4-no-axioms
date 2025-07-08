@@ -37,7 +37,7 @@ def checkIsRel (type : Expr) : MetaM (Option (Expr × Expr × Expr)) := do
     let r := rel.getAppFn'
     unless r.isConst do
       return none
-    if ((← getEnv).find? (.str r.constName! "trans")).isSome then
+    if ((← getEnv).find? (.str r.constName! "symm")).isSome then
       return some (rel, lhs, rhs)
     return none
   | _ => pure none
@@ -646,6 +646,7 @@ initialize
     add   := fun declName stx attrKind => do
       let thms ← mkSimpTheoremConst declName |>.run' {} {}
       thms.forM (fun x => cnsimpExt.add (.thm x))
+    applicationTime := .afterTypeChecking
   }
 
 end CnSimp

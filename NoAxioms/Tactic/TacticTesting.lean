@@ -429,6 +429,7 @@ def CnSimp.mkSimpTheoremCoreOther (origin : Origin) (e : Expr) (levelParams : Ar
     return { origin, keys, post, levelParams, proof, priority := prio, rfl := (← isRflProof proof) }
 
 def CnSimp.addLocalSimpLemma (thms : SimpTheorems) (e : Expr) (origin : Origin) (post : Bool := true) (inv : Bool := false) : MetaM SimpTheorems := withReducible do
+  let e ← instantiateMVars e
   let mvars ← getMVars e
   let e ← mkLambdaFVars (mvars.map Expr.mvar) e
   let type ← inferType e

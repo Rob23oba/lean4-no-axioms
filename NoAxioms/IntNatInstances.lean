@@ -1,4 +1,5 @@
 import NoAxioms.Ring
+import NoAxioms.Order
 
 instance : AddCongr Nat where
   add_congr h h' := h ▸ h' ▸ rfl
@@ -28,42 +29,43 @@ theorem Nat.mul_assoc' (a b c : Nat) : a * b * c = a * (b * c) := by
 theorem Nat.add_mul' (a b c : Nat) : (a + b) * c = a * c + b * c := by
   rw [Nat.mul_comm _ c, Nat.mul_comm _ c, Nat.mul_comm _ c, Nat.mul_add]
 
-instance : CommSemiring Nat where
-  mul_one := Nat.mul_one
-  one_mul := Nat.one_mul
-  mul_comm := Nat.mul_comm
-  mul_assoc := Nat.mul_assoc'
-  mul_zero := Nat.mul_zero
-  zero_mul := Nat.zero_mul
-  add_zero := Nat.add_zero
-  zero_add := Nat.zero_add
-  add_assoc := Nat.add_assoc
-  add_comm := Nat.add_comm
-  natCast_zero := rfl
-  natCast_succ _ := rfl
-  mul_add := Nat.mul_add
-  add_mul := Nat.add_mul'
+theorem Nat.div.go_eq (y : Nat) (hy : 0 < y) (fuel x : Nat) (hfuel : x < fuel) :
+    Nat.div.go y hy fuel x hfuel = x / y := by
+  induction fuel using Nat.strongRecOn generalizing x with
+  | ind k ih =>
+    unfold go
+    rcases k with (_ | ⟨k⟩); contradiction
+    change _ = Nat.div _ _
+    dsimp
+    unfold Nat.div
+    rw [dif_pos hy]
+    conv => rhs; unfold go
+    apply dite_congr rfl
+    · intro h
+      rw [ih _ hfuel, ih _ (Nat.lt_succ_self _)]
+    · intro h
+      rfl
 
-instance : AddCongr Int where
-  add_congr h h' := h ▸ h' ▸ rfl
+theorem Nat.div_eq' (x y : Nat) : x / y = if 0 < y ∧ y ≤ x then (x - y) / y + 1 else 0 := by
+  change x.div y = _
+  unfold Nat.div
+  unfold Nat.div.go
+  split
+  · split
+    · rw [if_pos ⟨‹_›, ‹_›⟩, div.go_eq]
+    · rw [if_neg (fun h => absurd h.2 ‹_›)]
+  · rw [if_neg (fun h => absurd h.1 ‹_›)]
 
-instance : SubCongr Int where
-  sub_congr h h' := h ▸ h' ▸ rfl
+theorem Nat.zero_div' (x : Nat) : 0 / x = 0 := by
+  rw [Nat.div_eq', if_neg]
+  intro ⟨h1, h2⟩
+  match x, h1, h2 with
+  | 0, _, _ => contradiction
 
-instance : MulCongr Int where
-  mul_congr h h' := h ▸ h' ▸ rfl
-
-instance : DivCongr Int where
-  div_congr h h' := h ▸ h' ▸ rfl
-
-instance : NegCongr Int where
-  neg_congr h := h ▸ rfl
-
-instance : LECongr Int where
-  le_congr h h' := h ▸ h' ▸ .rfl
-
-instance : LTCongr Int where
-  lt_congr h h' := h ▸ h' ▸ .rfl
+theorem Nat.add_sub_add_right' (n k m : Nat) : n + k - (m + k) = n - m := by
+  induction k with
+  | zero => rfl
+  | succ k ih => rw [Nat.add_succ, Nat.add_succ, Nat.succ_sub_succ, ih]
 
 theorem Nat.add_sub_cancel_right' (a b : Nat) : a + b - b = a := by
   induction b with
@@ -71,6 +73,23 @@ theorem Nat.add_sub_cancel_right' (a b : Nat) : a + b - b = a := by
   | succ k ih =>
     dsimp only [Nat.add_succ, Nat.add_zero]
     rw [Nat.succ_sub_succ, ih]
+
+theorem Nat.add_div_right' {x y : Nat} (hy : 0 < y) : (x + y) / y = x / y + 1 := by
+  rw [Nat.div_eq', if_pos]
+  · rw [Nat.add_sub_cancel_right']
+  · exact ⟨hy, le_add_left y x⟩
+
+theorem Nat.mul_div_cancel'' (a : Nat) {b : Nat} (hb : 0 < b) : a * b / b = a := by
+  induction a with
+  | zero => rw [Nat.zero_mul, Nat.zero_div']
+  | succ k ih => rw [Nat.succ_mul, Nat.add_div_right' hb, ih]
+
+theorem Nat.mul_right_cancel' {a b c : Nat} (hc : 0 < c) (h : a * c = b * c) : a = b := by
+  rw [← Nat.mul_div_cancel'' a hc, ← Nat.mul_div_cancel'' b hc, h]
+
+theorem Nat.mul_left_cancel' {a b c : Nat} (ha : 0 < a) (h : a * b = a * c) : b = c := by
+  rw [Nat.mul_comm a, Nat.mul_comm a] at h
+  exact Nat.mul_right_cancel' ha h
 
 theorem Nat.add_sub_cancel_left' (a b : Nat) : a + b - a = b := by
   rw [Nat.add_comm, Nat.add_sub_cancel_right']
@@ -96,6 +115,101 @@ theorem Nat.add_right_cancel' {a b c : Nat} (h : a + c = b + c) : a = b := by
 
 theorem Nat.add_left_cancel' {a b c : Nat} (h : a + b = a + c) : b = c := by
   rw [← Nat.add_sub_cancel_left' a b, h, Nat.add_sub_cancel_left' a c]
+
+instance : IsCancelAdd Nat where
+  add_left_cancel _ _ _ := Nat.add_left_cancel'
+  add_right_cancel _ _ _ := Nat.add_right_cancel'
+
+instance : IsCancelMulWithZero Nat where
+  mul_left_cancel _ _ _ h := Nat.mul_left_cancel' (Nat.pos_of_ne_zero h)
+  mul_right_cancel _ _ _ h := Nat.mul_right_cancel' (Nat.pos_of_ne_zero h)
+
+instance : CommSemiring Nat where
+  mul_one := Nat.mul_one
+  one_mul := Nat.one_mul
+  mul_comm := Nat.mul_comm
+  mul_assoc := Nat.mul_assoc'
+  mul_zero := Nat.mul_zero
+  zero_mul := Nat.zero_mul
+  add_zero := Nat.add_zero
+  zero_add := Nat.zero_add
+  add_assoc := Nat.add_assoc
+  add_comm := Nat.add_comm
+  natCast_zero := rfl
+  natCast_succ _ := rfl
+  mul_add := Nat.mul_add
+  add_mul := Nat.add_mul'
+
+instance : LinearOrder Nat where
+  le_of_eq _ _ h := Nat.le_of_eq h
+  le_trans _ _ _ := Nat.le_trans
+  lt_iff_le_not_le _ _ := Nat.lt_iff_le_not_le
+  le_antisymm _ _ := Nat.le_antisymm
+  le_of_not_le _ _ := Nat.le_of_not_le
+
+theorem Nat.le_of_add_le_add_right' {a b c : Nat} : a + c ≤ b + c → a ≤ b := by
+  intro h
+  induction c with
+  | zero => exact h
+  | succ k ih => exact ih (Nat.le_of_succ_le_succ h)
+
+theorem Nat.div_le_succ_div (a b : Nat) : a / b ≤ (a + 1) / b := by
+  induction a using Nat.strongRecOn with | ind a ih
+  · conv => lhs; rw [Nat.div_eq']
+    split
+    · rename_i h
+      conv => rhs; rw [Nat.div_eq']
+      rw [if_pos ⟨h.1, Nat.le_add_right_of_le h.2⟩]
+      apply Nat.succ_le_succ
+      obtain ⟨a, rfl⟩ := h.2.dest
+      rw [Nat.add_assoc, Nat.add_sub_cancel_left', Nat.add_sub_cancel_left']
+      apply ih
+      change a + 1 ≤ b + a
+      rw [Nat.add_comm b]
+      apply Nat.add_le_add_left
+      exact h.1
+    · exact Nat.zero_le _
+
+theorem Nat.div_le_div_right_of_le {a b c : Nat} (h : a ≤ b) : a / c ≤ b / c := by
+  obtain ⟨b, rfl⟩ := h.dest
+  clear h
+  induction b with
+  | zero => rfl
+  | succ k ih =>
+    rw [Nat.add_succ]
+    exact ih.trans (Nat.div_le_succ_div ..)
+
+theorem Nat.le_of_mul_le_mul_right' {a b c : Nat} (h : a * c ≤ b * c) (hc : 0 < c) : a ≤ b := by
+  rw [← Nat.mul_div_cancel'' a hc, ← Nat.mul_div_cancel'' b hc]
+  exact Nat.div_le_div_right_of_le h
+
+instance : IsStrictOrderedRing Nat where
+  le_of_add_le_add_right a b c h := by
+    induction c with
+    | zero => exact h
+    | succ k ih => exact ih (Nat.le_of_succ_le_succ h)
+  le_of_mul_le_mul_right _ _ _ h h' := Nat.le_of_mul_le_mul_right h' h
+
+instance : AddCongr Int where
+  add_congr h h' := h ▸ h' ▸ rfl
+
+instance : SubCongr Int where
+  sub_congr h h' := h ▸ h' ▸ rfl
+
+instance : MulCongr Int where
+  mul_congr h h' := h ▸ h' ▸ rfl
+
+instance : DivCongr Int where
+  div_congr h h' := h ▸ h' ▸ rfl
+
+instance : NegCongr Int where
+  neg_congr h := h ▸ rfl
+
+instance : LECongr Int where
+  le_congr h h' := h ▸ h' ▸ .rfl
+
+instance : LTCongr Int where
+  lt_congr h h' := h ▸ h' ▸ .rfl
 
 theorem Nat.add_right_cancel_iff' {a b c : Nat} : a + c = b + c ↔ a = b :=
   ⟨Nat.add_right_cancel', fun h => h ▸ rfl⟩
@@ -304,65 +418,155 @@ instance : CommRing Int where
   add_mul := Int.add_mul'
   mul_comm := Int.mul_comm'
 
-theorem Nat.div.go_eq (y : Nat) (hy : 0 < y) (fuel x : Nat) (hfuel : x < fuel) :
-    Nat.div.go y hy fuel x hfuel = x / y := by
-  induction fuel using Nat.strongRecOn generalizing x with
-  | ind k ih =>
-    unfold go
-    rcases k with (_ | ⟨k⟩); contradiction
-    change _ = Nat.div _ _
-    dsimp
-    unfold Nat.div
-    rw [dif_pos hy]
-    conv => rhs; unfold go
-    apply dite_congr rfl
-    · intro h
-      rw [ih _ hfuel, ih _ (Nat.lt_succ_self _)]
-    · intro h
+theorem Int.mul_tdiv_cancel'' (a : Int) {b : Int} (h : b ≠ 0) : (a * b).tdiv b = a := by
+  change (a.mul b).tdiv b = a
+  unfold Int.mul Int.tdiv
+  rcases a with (a | a)
+  <;> rcases b with (b | b)
+  <;> dsimp only [ofNat_eq_coe, ← natCast_mul, Nat.succ_eq_add_one, ← natCast_add, ← natCast_ediv]
+  · apply Int.ofNat_inj.mpr
+    apply Nat.mul_div_cancel''
+    rw [ofNat_eq_coe, ne_eq] at h
+    replace h := (not_congr ofNat_eq_zero).mp h
+    exact Nat.zero_lt_of_ne_zero h
+  · unfold negOfNat
+    cases a
+    · rw [Nat.zero_mul]
+      dsimp only [natCast_add, cast_ofNat_Int]
+      rw [Nat.zero_div']
       rfl
+    · rw [Nat.succ_mul_succ]
+      dsimp only [natCast_add, cast_ofNat_Int]
+      rw [← Nat.succ_mul_succ, Nat.mul_div_cancel'' _ (Nat.zero_lt_succ _), Int.natCast_succ]
+  · rw [ofNat_eq_coe, ne_eq] at h
+    replace h := (not_congr ofNat_eq_zero).mp h
+    unfold negOfNat
+    rw (occs := .pos [1]) [← Nat.sub_one_add_one h, Nat.succ_mul_succ]
+    dsimp only [natCast_add, cast_ofNat_Int, natCast_mul]
+    rw [← Nat.succ_mul_succ, Nat.succ_eq_add_one (b - 1), Nat.sub_one_add_one h]
+    rw [Nat.mul_div_cancel'' _ (Nat.zero_lt_of_ne_zero h)]
+    rfl
+  · rw [Nat.mul_div_cancel'' _ (Nat.zero_lt_succ _)]
+    rfl
 
-theorem Nat.div_eq' (x y : Nat) : x / y = if 0 < y ∧ y ≤ x then (x - y) / y + 1 else 0 := by
-  change x.div y = _
-  unfold Nat.div
-  unfold Nat.div.go
-  split
-  · split
-    · rw [if_pos ⟨‹_›, ‹_›⟩, div.go_eq]
-    · rw [if_neg (fun h => absurd h.2 ‹_›)]
-  · rw [if_neg (fun h => absurd h.1 ‹_›)]
+theorem Int.mul_right_cancel' {a b c : Int} (hc : c ≠ 0) (h : a * c = b * c) : a = b := by
+  rw [← Int.mul_tdiv_cancel'' a hc, ← Int.mul_tdiv_cancel'' b hc, h]
 
-theorem Nat.zero_div' (x : Nat) : 0 / x = 0 := by
-  rw [Nat.div_eq', if_neg]
-  intro ⟨h1, h2⟩
-  match x, h1, h2 with
-  | 0, _, _ => contradiction
+theorem Int.mul_left_cancel' {a b c : Int} (ha : a ≠ 0) (h : a * b = a * c) : b = c := by
+  rw [← Int.mul_tdiv_cancel'' c ha, Int.mul_comm', ← h, Int.mul_comm', Int.mul_tdiv_cancel'' _ ha]
 
-theorem Nat.add_sub_add_right' (n k m : Nat) : n + k - (m + k) = n - m := by
-  induction k with
-  | zero => rfl
-  | succ k ih => rw [Nat.add_succ, Nat.add_succ, Nat.succ_sub_succ, ih]
+instance : IsCancelMulWithZero Int where
+  mul_left_cancel _ _ _ h := Int.mul_left_cancel' h
+  mul_right_cancel _ _ _ h := Int.mul_right_cancel' h
 
-theorem Nat.add_div_right' {x y : Nat} (hy : 0 < y) : (x + y) / y = x / y + 1 := by
-  rw [Nat.div_eq', if_pos]
-  · rw [Nat.add_sub_cancel_right']
-  · exact ⟨hy, le_add_left y x⟩
+@[ccongr]
+theorem Int.NonNeg.congr {x y : Int} (h : x ~= y) : x.NonNeg ↔ y.NonNeg :=
+  h ▸ .rfl
 
-theorem Nat.mul_div_cancel'' (a : Nat) {b : Nat} (hb : 0 < b) : a * b / b = a := by
-  induction a with
-  | zero => rw [Nat.zero_mul, Nat.zero_div']
-  | succ k ih => rw [Nat.succ_mul, Nat.add_div_right' hb, ih]
+theorem Int.le_iff_exists {x y : Int} : x ≤ y ↔ ∃ z : Nat, x + z = y := by
+  constructor
+  · intro h
+    cnsimp [Int.le_def] at h
+    generalize hyx : y - x = yx at h
+    rcases h with ⟨yx'⟩
+    exists yx'
+    dsimp at hyx
+    change _ ~= (_ : Int) at hyx ⊢
+    cnsimp [← hyx]
+  · intro ⟨z, hz⟩
+    subst hz
+    cnsimp [Int.le_def]
+    exact ⟨z⟩
 
-theorem Nat.mul_right_cancel' {a b c : Nat} (hc : 0 < c) (h : a * c = b * c) : a = b := by
-  rw [← Nat.mul_div_cancel'' a hc, ← Nat.mul_div_cancel'' b hc, h]
+theorem Int.le_refl' (x : Int) : x ≤ x := by
+  dsimp [· ≤ ·, Int.le]
+  cnsimp only [sub_self]
+  exact .mk 0
 
-theorem Nat.mul_left_cancel' {a b c : Nat} (ha : 0 < a) (h : a * b = a * c) : b = c := by
-  rw [Nat.mul_comm a, Nat.mul_comm a] at h
-  exact Nat.mul_right_cancel' ha h
+theorem Int.le_trans' {x y z : Int} (h : x ≤ y) (h' : y ≤ z) : x ≤ z := by
+  cnsimp [Int.le_iff_exists] at *
+  rcases h with ⟨a, ha⟩
+  rcases h' with ⟨b, hb⟩
+  exists a + b
+  rw [Int.natCast_add, ← Int.add_assoc', ha, hb]
 
-instance : IsCancelAdd Nat where
-  add_left_cancel _ _ _ := Nat.add_left_cancel'
-  add_right_cancel _ _ _ := Nat.add_right_cancel'
+theorem Int.le_antisymm' {x y : Int} (h : x ≤ y) (h' : y ≤ x) : x = y := by
+  dsimp [· ≤ ·, Int.le] at *
+  generalize hyx : y - x = yx at h
+  generalize hxy : x - y = xy at h'
+  rcases h with ⟨yx'⟩
+  rcases h' with ⟨xy'⟩
+  change _ ~= (_ : Int) at hyx hxy ⊢
+  cnsimp only [← neg_sub x] at hyx
+  cnsimp only [hxy] at hyx
+  match xy', yx', hyx with
+  | 0, 0, _ => exact eq_of_sub_eq_zero hxy
 
-instance : IsCancelMulWithZero Nat where
-  mul_left_cancel _ _ _ h := Nat.mul_left_cancel' (Nat.pos_of_ne_zero h)
-  mul_right_cancel _ _ _ h := Nat.mul_right_cancel' (Nat.pos_of_ne_zero h)
+theorem Int.le_of_not_le' {x y : Int} (h : ¬x ≤ y) : y ≤ x := by
+  cnsimp only [Int.le_def] at h ⊢
+  cnsimp only [← neg_sub x] at h
+  generalize x - y = a at *
+  match a with
+  | .ofNat n => exact ⟨n⟩
+  | .negSucc n => exact absurd ⟨n + 1⟩ h
+
+theorem Int.not_le' {x y : Int} : ¬x ≤ y ↔ y < x := by
+  change _ ↔ y + 1 ≤ x
+  cnsimp only [Int.le_def]
+  cnrw [← neg_sub x, ← sub_sub]
+  generalize x - y = a at *
+  match a with
+  | .ofNat (k + 1) =>
+    constructor
+    · intro h
+      rw [Int.ofNat_eq_coe]
+      cnsimp only [Nat.cast_add, Nat.cast_one, add_sub_cancel_right]
+      exact ⟨k⟩
+    · nofun
+  | .ofNat 0 =>
+    constructor
+    · intro h
+      exact absurd ⟨0⟩ h
+    · nofun
+  | .negSucc n =>
+    constructor
+    · intro h
+      exact absurd ⟨n + 1⟩ h
+    · nofun
+
+instance : LinearOrder Int where
+  le_of_eq _ _ h := h ▸ Int.le_refl' _
+  le_trans _ _ _ h h' := Int.le_trans' h h'
+  le_antisymm _ _ h h' := Int.le_antisymm' h h'
+  le_of_not_le _ _ h := Int.le_of_not_le' h
+  lt_iff_le_not_le _ _ := by
+    cnsimp only [← Int.not_le']
+    constructor
+    · intro h
+      exact ⟨Int.le_of_not_le' h, h⟩
+    · intro ⟨_, h⟩
+      exact h
+
+theorem Int.NonNeg.tdiv {x y : Int} (hx : x.NonNeg) (hy : y.NonNeg) : (x.tdiv y).NonNeg := by
+  rcases hx with ⟨x⟩
+  rcases hy with ⟨y⟩
+  exact ⟨x / y⟩
+
+theorem Int.le_of_mul_le_mul_right' {x y z : Int} (hz : 0 < z) (h : x * z ≤ y * z) : x ≤ y := by
+  rcases Int.le_iff_exists.mp hz with ⟨a, rfl⟩
+  cnsimp only [zero_add, le_def] at *
+  cnsimp only [← sub_mul] at h
+  have : (a + 1 : Int) ≠ 0 := nofun
+  rw [← Int.mul_tdiv_cancel'' (y - x) this]
+  rw [Int.add_comm'] at h
+  exact h.tdiv ⟨a + 1⟩
+
+instance : IsStrictOrderedRing Int where
+  le_of_add_le_add_right a b c h := by
+    cnsimp only [Int.le_iff_exists] at *
+    obtain ⟨z, hz⟩ := h
+    exists z
+    change a + c + z ~= b + c at hz
+    cnrw [add_right_comm a, add_left_inj] at hz
+    exact hz
+  le_of_mul_le_mul_right _ _ _ := Int.le_of_mul_le_mul_right'

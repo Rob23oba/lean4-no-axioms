@@ -1,41 +1,5 @@
 import NoAxioms.IntNatInstances
 
-open scoped Int in
-
-theorem Int.mul_tdiv_cancel'' (a : Int) {b : Int} (h : b ≠ 0) : (a * b).tdiv b = a := by
-  change (a.mul b).tdiv b = a
-  unfold Int.mul Int.tdiv
-  rcases a with (a | a)
-  <;> rcases b with (b | b)
-  <;> dsimp only [ofNat_eq_coe, ← natCast_mul, Nat.succ_eq_add_one, ← natCast_add, ← natCast_ediv]
-  · apply Int.ofNat_inj.mpr
-    apply Nat.mul_div_cancel''
-    rw [ofNat_eq_coe, ne_eq] at h
-    replace h := (not_congr ofNat_eq_zero).mp h
-    exact Nat.zero_lt_of_ne_zero h
-  · unfold negOfNat
-    cases a
-    · rw [Nat.zero_mul]
-      dsimp only [natCast_add, cast_ofNat_Int]
-      rw [Nat.zero_div']
-      rfl
-    · rw [Nat.succ_mul_succ]
-      dsimp only [natCast_add, cast_ofNat_Int]
-      rw [← Nat.succ_mul_succ, Nat.mul_div_cancel'' _ (Nat.zero_lt_succ _), Int.natCast_succ]
-  · rw [ofNat_eq_coe, ne_eq] at h
-    replace h := (not_congr ofNat_eq_zero).mp h
-    unfold negOfNat
-    rw (occs := .pos [1]) [← Nat.sub_one_add_one h, Nat.succ_mul_succ]
-    dsimp only [natCast_add, cast_ofNat_Int, natCast_mul]
-    rw [← Nat.succ_mul_succ, Nat.succ_eq_add_one (b - 1), Nat.sub_one_add_one h]
-    rw [Nat.mul_div_cancel'' _ (Nat.zero_lt_of_ne_zero h)]
-    rfl
-  · rw [Nat.mul_div_cancel'' _ (Nat.zero_lt_succ _)]
-    rfl
-
-theorem Int.mul_right_cancel' {a b c : Int} (hc : c ≠ 0) (h : a * c = b * c) : a = b := by
-  rw [← Int.mul_tdiv_cancel'' a hc, ← Int.mul_tdiv_cancel'' b hc, h]
-
 @[elab_as_elim]
 def Int.negRec {motive : Int → Sort u}
     (ofNat : (n : Nat) → motive n) (neg : (n : Int) → motive n → motive (-n))
@@ -54,20 +18,6 @@ theorem Int.zero_succ_neg_ind {motive : Int → Prop}
   induction n with
   | zero => exact zero
   | succ k ih => exact succ k ih
-
-theorem Int.sub_self' (a : Int) : a - a = 0 := by
-  change a.add a.neg = 0
-  unfold Int.add Int.neg
-  rcases a with ((_ | a) | a)
-  · rfl
-  · dsimp only [ofNat_eq_coe, cast_ofNat_Int, negOfNat, Nat.succ_eq_add_one,
-      subNatNat]
-    rw [Nat.sub_self]
-    dsimp
-  · dsimp only [negOfNat, Nat.succ_eq_add_one, cast_ofNat_Int, ofNat_eq_coe,
-      subNatNat]
-    rw [Nat.sub_self]
-    dsimp
 
 theorem Int.negOfNat_eq' (x : Nat) : negOfNat x = -x := rfl
 
@@ -233,10 +183,6 @@ theorem Nat.max_le' {x y z : Nat} : max x y ≤ z ↔ x ≤ z ∧ y ≤ z := by
       · exact h'
       · exact trans (Nat.le_of_not_le h) h'
     · exact And.left
-
-@[ccongr]
-theorem Int.NonNeg_congr {x y : Int} (h : x ~= y) : x.NonNeg ↔ y.NonNeg :=
-  h ▸ .rfl
 
 structure Rat where
   num : Int
@@ -675,7 +621,7 @@ theorem Int.le_iff_exists {x y : Int} : x ≤ y ↔ ∃ z : Nat, x + z = y := by
 
 theorem Int.le_refl' (x : Int) : x ≤ x := by
   dsimp [· ≤ ·, Int.le]
-  rw [Int.sub_self']
+  cnsimp only [sub_self]
   exact .mk 0
 
 theorem Int.le_trans' {x y z : Int} (h : x ≤ y) (h' : y ≤ z) : x ≤ z := by
@@ -783,14 +729,6 @@ theorem Rat.le_of_le_of_eq' {x y z : Rat} (h : x ≤ y) (h' : y ~= z) : x ≤ z 
 
 theorem Rat.le_of_eq'_of_le {x y z : Rat} (h : x ~= y) (h' : y ≤ z) : x ≤ z := by
   exact Rat.le_trans (Rat.le_of_eq' h) h'
-
-theorem Int.le_of_not_le' {x y : Int} (h : ¬x ≤ y) : y ≤ x := by
-  cnsimp only [Int.le_def] at h ⊢
-  cnsimp only [← neg_sub x] at h
-  generalize x - y = a at *
-  match a with
-  | .ofNat n => exact ⟨n⟩
-  | .negSucc n => exact absurd ⟨n + 1⟩ h
 
 theorem Rat.le_of_not_le {x y : Rat} (h : ¬x ≤ y) : y ≤ x := by
   cnsimp only [Rat.le_def] at *

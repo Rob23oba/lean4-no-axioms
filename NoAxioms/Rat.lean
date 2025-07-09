@@ -576,6 +576,8 @@ instance : Ring Rat where
 instance : CommRing Rat where
   mul_comm := mul_comm
 
+instance : Field Rat where
+
 theorem Rat.add_div (x y z : Rat) : (x + y) / z ~= x / z + y / z := by
   cnsimp [div_eq_mul_inv, add_mul]
 
@@ -604,135 +606,40 @@ theorem Rat.le_def {x y : Rat} : x ≤ y ↔ x.num * y.den ≤ y.num * x.den := 
 
 theorem Rat.lt_def {x y : Rat} : x < y ↔ x.num * y.den < y.num * x.den := Iff.rfl
 
-theorem Int.le_iff_exists {x y : Int} : x ≤ y ↔ ∃ z : Nat, x + z = y := by
-  constructor
-  · intro h
-    cnsimp [Int.le_def] at h
-    generalize hyx : y - x = yx at h
-    rcases h with ⟨yx'⟩
-    exists yx'
-    dsimp at hyx
-    change _ ~= (_ : Int) at hyx ⊢
-    cnsimp [← hyx]
-  · intro ⟨z, hz⟩
-    subst hz
-    cnsimp [Int.le_def]
-    exact ⟨z⟩
-
-theorem Int.le_refl' (x : Int) : x ≤ x := by
-  dsimp [· ≤ ·, Int.le]
-  cnsimp only [sub_self]
-  exact .mk 0
-
-theorem Int.le_trans' {x y z : Int} (h : x ≤ y) (h' : y ≤ z) : x ≤ z := by
-  cnsimp [Int.le_iff_exists] at *
-  rcases h with ⟨a, ha⟩
-  rcases h' with ⟨b, hb⟩
-  exists a + b
-  rw [Int.natCast_add, ← Int.add_assoc', ha, hb]
-
-theorem Int.le_antisymm' {x y : Int} (h : x ≤ y) (h' : y ≤ x) : x = y := by
-  dsimp [· ≤ ·, Int.le] at *
-  generalize hyx : y - x = yx at h
-  generalize hxy : x - y = xy at h'
-  rcases h with ⟨yx'⟩
-  rcases h' with ⟨xy'⟩
-  change _ ~= (_ : Int) at hyx hxy ⊢
-  cnsimp only [← neg_sub x] at hyx
-  cnsimp only [hxy] at hyx
-  match xy', yx', hyx with
-  | 0, 0, _ => exact eq_of_sub_eq_zero hxy
-
 theorem Rat.le_refl (x : Rat) : x ≤ x := by
   cnsimp [Rat.le_def]
-  rw [Int.mul_comm']
-  exact Int.le_refl' _
 
 theorem Rat.le_antisymm {x y : Rat} (h : x ≤ y) (h' : y ≤ x) : x ~= y := by
   cnsimp [Rat.le_def, eqv_def] at *
   exact Int.le_antisymm' h h'
-
-theorem Int.NonNeg.mul {a b : Int} : a.NonNeg → b.NonNeg → (a * b).NonNeg
-  | ⟨a⟩, ⟨b⟩ => ⟨a * b⟩
-
-theorem Int.NonNeg.tdiv {a b : Int} : a.NonNeg → b.NonNeg → (a.tdiv b).NonNeg
-  | ⟨a⟩, ⟨b⟩ => ⟨a / b⟩
-
-theorem Int.NonNeg.add {a b : Int} : a.NonNeg → b.NonNeg → (a + b).NonNeg
-  | ⟨a⟩, ⟨b⟩ => ⟨a + b⟩
-
-theorem Int.mul_nonneg' {a b : Int} (h : 0 ≤ a) (h' : 0 ≤ b) : 0 ≤ a * b := by
-  cnsimp [Int.le_def] at *
-  exact h.mul h'
-
-theorem Int.mul_le_mul_of_nonneg_right' {x y z : Int} (hz : 0 ≤ z) (h : x ≤ y) : x * z ≤ y * z := by
-  cnsimp [Int.le_def, ← sub_mul] at *
-  exact h.mul hz
-
-theorem Int.mul_le_mul_of_nonneg_left' {x y z : Int} (hx : 0 ≤ x) (h : y ≤ z) : x * y ≤ x * z := by
-  cnsimp only [mul_comm x]
-  exact Int.mul_le_mul_of_nonneg_right' hx h
-
-theorem Int.pos_iff_exists {x : Int} : 0 < x ↔ ∃ y : Nat, x = y + 1 := by
-  cnsimp only [Int.lt_iff_add_one_le, Int.le_def, Int.nonneg_def]
-  constructor
-  · intro ⟨n, (hn : _ ~= (_ : Int))⟩
-    cnsimp [sub_eq_iff_eq_add] at hn
-    exact ⟨n, hn⟩
-  · intro ⟨n, (hn : _ ~= (_ : Int))⟩
-    cnsimp [← sub_eq_iff_eq_add] at hn
-    exact ⟨n, hn⟩
-
-theorem Int.le_of_mul_le_mul_right' {x y z : Int} (hz : 0 < z) (h : x * z ≤ y * z) : x ≤ y := by
-  rcases Int.pos_iff_exists.mp hz with ⟨a, rfl⟩
-  cnsimp [Int.le_def] at *
-  cnsimp only [← sub_mul] at h
-  have : (a + 1 : Int) ≠ 0 := nofun
-  rw [← Int.mul_tdiv_cancel'' (y - x) this]
-  exact h.tdiv ⟨a + 1⟩
-
-theorem Int.le_of_mul_le_mul_left' {x y z : Int} (hx : 0 < x) (h : x * y ≤ x * z) : y ≤ z := by
-  rw [Int.mul_comm' x, Int.mul_comm' x] at h
-  exact Int.le_of_mul_le_mul_right' hx h
-
-theorem Int.le_of_lt' {a b : Int} (h : a < b) : a ≤ b := by
-  cnsimp [Int.lt_iff_add_one_le, Int.le_def, Int.nonneg_def] at h ⊢
-  rcases h with ⟨n, (hn : _ ~= (_ : Int))⟩
-  exists n + 1
-  cnsimp only [← sub_sub, sub_eq_iff_eq_add (x := b - a)] at hn
-  exact hn
-
-theorem Int.mul_le_mul_right_iff' {x y z : Int} (hz : 0 < z) : x * z ≤ y * z ↔ x ≤ y := by
-  constructor
-  · exact Int.le_of_mul_le_mul_right' hz
-  · exact Int.mul_le_mul_of_nonneg_right' (Int.le_of_lt' hz)
 
 theorem Rat.le_trans {x y z : Rat} (h : x ≤ y) (h' : y ≤ z) : x ≤ z := by
   cnsimp only [Rat.le_def] at *
   apply Int.le_of_mul_le_mul_right' y.ofNat_den_pos
   rw [Int.mul_right_comm']
   refine Int.le_trans' (y := y.num * x.den * z.den) ?_ ?_
-  · exact Int.mul_le_mul_of_nonneg_right' (Int.le_of_lt' z.ofNat_den_pos) h
+  · exact mul_le_mul_of_nonneg_right h (le_of_lt z.ofNat_den_pos)
   rw [Int.mul_right_comm']
   refine Int.le_trans' (y := z.num * y.den * x.den) ?_ ?_
-  · exact Int.mul_le_mul_of_nonneg_right' (Int.le_of_lt' x.ofNat_den_pos) h'
+  · exact mul_le_mul_of_nonneg_right h' (le_of_lt x.ofNat_den_pos)
   rw [Int.mul_right_comm']
-  exact Int.le_refl' _
 
 theorem Rat.le_of_eq' {x y : Rat} (h : x ~= y) : x ≤ y := by
   cnsimp only [Rat.le_def, Rat.eqv_def] at *
   rw [h]
-  exact Int.le_refl' _
-
-theorem Rat.le_of_le_of_eq' {x y z : Rat} (h : x ≤ y) (h' : y ~= z) : x ≤ z := by
-  exact Rat.le_trans h (Rat.le_of_eq' h')
-
-theorem Rat.le_of_eq'_of_le {x y z : Rat} (h : x ~= y) (h' : y ≤ z) : x ≤ z := by
-  exact Rat.le_trans (Rat.le_of_eq' h) h'
 
 theorem Rat.le_of_not_le {x y : Rat} (h : ¬x ≤ y) : y ≤ x := by
   cnsimp only [Rat.le_def] at *
   exact Int.le_of_not_le' h
+
+instance : LinearOrder Rat where
+  le_of_eq _ _ := Rat.le_of_eq'
+  le_trans _ _ _ := Rat.le_trans
+  le_antisymm _ _ := Rat.le_antisymm
+  le_of_not_le _ _ := Rat.le_of_not_le
+  lt_iff_le_not_le _ _ := by
+    cnsimp only [Rat.le_def, Rat.lt_def]
+    exact Preorder.lt_iff_le_not_le ..
 
 theorem Rat.le_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
     x₁ ≤ y₁ ↔ x₂ ≤ y₂ := by
@@ -756,7 +663,7 @@ theorem Int.add_le_add_left' {a b c : Int} (h : b ≤ c) : a + b ≤ a + c := by
   rw [Int.add_comm' a, Int.add_comm' a]
   exact Int.add_le_add_right' h
 
-theorem Rat.add_le_add_right {x y z : Rat} (h : x ≤ y) : x + z ≤ y + z := by
+protected theorem Rat.add_le_add_right {x y z : Rat} (h : x ≤ y) : x + z ≤ y + z := by
   cnsimp only [Rat.le_def] at *
   dsimp only [· + ·, Add.add]
   dsimp only [Rat.add, Int.natCast_mul]
@@ -764,17 +671,12 @@ theorem Rat.add_le_add_right {x y z : Rat} (h : x ≤ y) : x + z ≤ y + z := by
     ← Int.mul_assoc', ← Int.mul_assoc']
   rw [Int.mul_right_comm' y.num, Int.mul_right_comm' x.num]
   rw [← Int.add_mul', ← Int.add_mul']
-  apply Int.mul_le_mul_of_nonneg_right' z.ofNat_den_nonneg
+  apply mul_le_mul_of_nonneg_right _ z.ofNat_den_nonneg
   rw [Int.mul_right_comm' x.den, Int.mul_comm' x.den, Int.mul_right_comm' y.den]
   apply Int.add_le_add_right'
-  exact Int.mul_le_mul_of_nonneg_right' z.ofNat_den_nonneg h
+  exact mul_le_mul_of_nonneg_right h z.ofNat_den_nonneg
 
-instance : @Trans Rat Rat Rat (· ≤ ·) (· ≤ ·) (· ≤ ·) := ⟨Rat.le_trans⟩
-instance : @Trans Rat Rat Rat (· ≤ ·) (· ~= ·) (· ≤ ·) := ⟨Rat.le_of_le_of_eq'⟩
-instance : @Trans Rat Rat Rat (· ~= ·) (· ≤ ·) (· ≤ ·) := ⟨Rat.le_of_eq'_of_le⟩
-
-@[cnsimp]
-theorem Rat.add_le_add_iff_right {x y z : Rat} : x + z ≤ y + z ↔ x ≤ y := by
+protected theorem Rat.add_le_add_iff_right {x y z : Rat} : x + z ≤ y + z ↔ x ≤ y := by
   constructor
   · intro h
     calc
@@ -783,264 +685,29 @@ theorem Rat.add_le_add_iff_right {x y z : Rat} : x + z ≤ y + z ↔ x ≤ y := 
       _ ~= y := by cnsimp [add_assoc]
   · exact Rat.add_le_add_right
 
-theorem Rat.le_of_add_le_add_right {x y z : Rat} (h : x + z ≤ y + z) : x ≤ y := by
+protected theorem Rat.le_of_add_le_add_right {x y z : Rat} (h : x + z ≤ y + z) : x ≤ y := by
   exact Rat.add_le_add_iff_right.mp h
 
-theorem Rat.add_le_add_left {x y z : Rat} (h : y ≤ z) : x + y ≤ x + z := by
-  cnsimp only [add_comm x]
-  exact Rat.add_le_add_right h
+protected theorem Rat.num_mul (x y : Rat) : (x * y).num = x.num * y.num := rfl
+protected theorem Rat.den_mul (x y : Rat) : (x * y).den = x.den * y.den := rfl
 
-@[cnsimp]
-theorem Rat.add_le_add_iff_left {x y z : Rat} : x + y ≤ x + z ↔ y ≤ z := by
-  cnsimp only [add_comm x]
-  exact Rat.add_le_add_iff_right
-
-theorem Rat.le_of_add_le_add_left {x y z : Rat} (h : x + y ≤ x + z) : y ≤ z := by
-  exact Rat.add_le_add_iff_left.mp h
-
-theorem Rat.add_le_add {a b c d : Rat} (h : a ≤ c) (h' : b ≤ d) : a + b ≤ c + d := by
-  calc
-    a + b ≤ c + b := Rat.add_le_add_right h
-    c + b ≤ c + d := Rat.add_le_add_left h'
-
-theorem Int.not_le' {x y : Int} : ¬x ≤ y ↔ y < x := by
-  cnsimp only [Int.le_def, Int.lt_iff_add_one_le]
-  cnsimp only [← sub_sub, ← neg_sub y]
-  match y - x with
-  | .ofNat z =>
-    cnsimp only [sub_eq_add_neg, NonNeg.mk z, not_true, false_iff_iff]
-    cnsimp only [← neg_add_rev, add_comm (1 : Int)]
-    nofun
-  | .negSucc z =>
-    rw [Int.neg_negSucc, Int.natCast_succ]
-    cnsimp [show (z : Int).NonNeg from ⟨z⟩]
-    nofun
-
-@[cnsimp]
-theorem Rat.not_le {x y : Rat} : ¬x ≤ y ↔ y < x := by
-  cnsimp [Rat.le_def, Rat.lt_def]
-  exact Int.not_le'
-
-@[cnsimp]
-theorem Rat.not_lt {x y : Rat} : ¬x < y ↔ y ≤ x := by
-  cnsimp only [← Rat.not_le, not_not, iff_self_iff_true]
-
-theorem Rat.lt_irrefl (x : Rat) : ¬x < x := by
-  cnsimp only [Rat.not_lt]
-  exact Rat.le_refl x
-
-theorem Rat.le_of_lt {x y : Rat} (h : x < y) : x ≤ y := by
-  cnsimp only [← Rat.not_le] at h
-  exact Rat.le_of_not_le h
-
-theorem Rat.lt_of_le_of_lt {x y z : Rat} (h : x ≤ y) (h' : y < z) : x < z := by
-  cnsimp only [← Rat.not_le] at h' ⊢
-  intro h''
-  apply h'
-  exact Rat.le_trans h'' h
-
-theorem Rat.lt_of_lt_of_le {x y z : Rat} (h : x < y) (h' : y ≤ z) : x < z := by
-  cnsimp only [← Rat.not_le] at h ⊢
-  intro h''
-  apply h
-  exact Rat.le_trans h' h''
-
-theorem Rat.lt_of_eq'_of_lt {x y z : Rat} (h : x ~= y) (h' : y < z) : x < z := by
-  exact Rat.lt_of_le_of_lt (Rat.le_of_eq' h) h'
-
-theorem Rat.lt_of_lt_of_eq' {x y z : Rat} (h : x < y) (h' : y ~= z) : x < z := by
-  exact Rat.lt_of_lt_of_le h (Rat.le_of_eq' h')
-
-theorem Rat.lt_congr {x₁ x₂ y₁ y₂ : Rat} (hx : x₁ ~= x₂) (hy : y₁ ~= y₂) :
-    x₁ < y₁ ↔ x₂ < y₂ := by
-  cnsimp only [← Rat.not_le, hx, hy, iff_self_iff_true]
-
-instance : LTCongr Rat where
-  lt_congr := Rat.lt_congr
-
-theorem Rat.lt_trans {x y z : Rat} (h : x < y) (h' : y < z) : x < z := by
-  exact Rat.lt_of_lt_of_le h (Rat.le_of_lt h')
-
-theorem Rat.lt_asymm {x y : Rat} (h : x < y) : ¬y < x := by
-  cnsimp only [Rat.not_lt]
-  exact Rat.le_of_lt h
-
-theorem Rat.add_lt_add_right {x y z : Rat} (h : x < y) : x + z < y + z := by
-  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_right] at h ⊢
-  exact h
-
-@[cnsimp]
-theorem Rat.add_lt_add_iff_right {x y z : Rat} : x + z < y + z ↔ x < y := by
-  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_right, iff_self_iff_true]
-
-theorem Rat.add_lt_add_left {x y z : Rat} (h : y < z) : x + y < x + z := by
-  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_left] at h ⊢
-  exact h
-
-@[cnsimp]
-theorem Rat.add_lt_add_iff_left {x y z : Rat} : x + y < x + z ↔ y < z := by
-  cnsimp only [← Rat.not_le, Rat.add_le_add_iff_left, iff_self_iff_true]
-
-instance : @Trans Rat Rat Rat (· ≤ ·) (· < ·) (· < ·) := ⟨Rat.lt_of_le_of_lt⟩
-instance : @Trans Rat Rat Rat (· < ·) (· ≤ ·) (· < ·) := ⟨Rat.lt_of_lt_of_le⟩
-instance : @Trans Rat Rat Rat (· < ·) (· < ·) (· < ·) := ⟨Rat.lt_trans⟩
-instance : @Trans Rat Rat Rat (· < ·) (· ~= ·) (· < ·) := ⟨Rat.lt_of_lt_of_eq'⟩
-instance : @Trans Rat Rat Rat (· ~= ·) (· < ·) (· < ·) := ⟨Rat.lt_of_eq'_of_lt⟩
-
-theorem Rat.add_lt_add {a b c d : Rat} (h : a < c) (h' : b < d) : a + b < c + d := by
-  calc
-    a + b < c + b := Rat.add_lt_add_right h
-    c + b < c + d := Rat.add_lt_add_left h'
-
-theorem Rat.num_mul (x y : Rat) : (x * y).num = x.num * y.num := rfl
-theorem Rat.den_mul (x y : Rat) : (x * y).den = x.den * y.den := rfl
-
-theorem Rat.neg_le_neg {x y : Rat} (h : x ≤ y) : -y ≤ -x := by
-  apply Rat.le_of_add_le_add_left (x := y)
-  cnsimp only [add_neg_cancel]
-  apply Rat.le_of_add_le_add_left (x := x)
-  cnsimp only [add_zero, add_left_comm x, add_neg_cancel]
-  exact h
-
-theorem Rat.neg_le_neg_iff {x y : Rat} : -y ≤ -x ↔ x ≤ y := by
-  constructor
-  · intro h
-    calc
-      x ~= -(-x) := by cnsimp
-      _ ≤ -(-y) := Rat.neg_le_neg h
-      _ ~= y := by cnsimp
-  · exact Rat.neg_le_neg
-
-theorem Rat.neg_nonneg {x : Rat} : 0 ≤ -x ↔ x ≤ 0 := by
-  calc
-    _ ↔ x + 0 ≤ x + -x := Rat.add_le_add_iff_left.symm
-    _ ↔ x ≤ 0 := by cnsimp
-
-theorem Rat.neg_nonpos {x : Rat} : -x ≤ 0 ↔ 0 ≤ x := by
-  calc
-    _ ↔ x + -x ≤ x + 0 := Rat.add_le_add_iff_left.symm
-    _ ↔ 0 ≤ x := by cnsimp
-
-theorem Rat.neg_eq_zero {x : Rat} : -x ~= 0 ↔ x ~= 0 := by
-  calc
-    _ ↔ x + -x ~= x + 0 := add_left_cancel_iff.symm
-    _ ↔ 0 ~= x := by cnsimp
-    _ ↔ x ~= 0 := Eq.comm
-
-theorem Rat.inv_neg {x : Rat} : (-x)⁻¹ ~= -x⁻¹ := by
-  by_cases' h : x ~= 0
-  · cnsimp [h]
-  calc
-    (-x)⁻¹ ~= (-1 * x)⁻¹ := by cnsimp [neg_mul]
-    _ ~= x⁻¹ * (-1)⁻¹ := inv_mul_rev ..
-    _ ~= x⁻¹ * (-1) := by ccongr <;> rfl
-    _ ~= -x⁻¹ := by cnsimp
-
-theorem Rat.neg_le_symm {x y : Rat} (h : -x ≤ y) : -y ≤ x := by
-  calc
-    -y ~= x + -x + -y := by cnsimp
-    _ ≤ x + y + -y := Rat.add_le_add_right (Rat.add_le_add_left h)
-    _ ~= x := by cnsimp [add_assoc]
-
-theorem Rat.neg_le_comm (x y : Rat) : -x ≤ y ↔ -y ≤ x :=
-  ⟨Rat.neg_le_symm, Rat.neg_le_symm⟩
-
-theorem Rat.mul_le_mul_of_nonneg_right {x y z : Rat} (h : 0 ≤ z) (h' : x ≤ y) : x * z ≤ y * z := by
+protected theorem Rat.le_of_mul_le_mul_right {x y z : Rat} (h : 0 < z) (h' : x * z ≤ y * z) : x ≤ y := by
   cnsimp only [Rat.le_def] at *
+  dsimp only [Rat.num_mul, Rat.den_mul, Int.natCast_mul] at h'
+  cnrw [← mul_assoc, mul_right_comm x.num, mul_right_comm y.num, mul_assoc _ z.num] at h'
+  apply le_of_mul_le_mul_right h'
+  cnsimp only [Rat.lt_def] at h
   dsimp [num_ofNat, den_ofNat] at h
-  rw [Int.zero_mul', Int.mul_one'] at h
-  dsimp [Rat.num_mul, Rat.den_mul, Int.natCast_mul]
-  rw [← Int.mul_assoc', ← Int.mul_assoc']
-  apply Int.mul_le_mul_of_nonneg_right' z.ofNat_den_nonneg
-  rw [Int.mul_right_comm' x.num, Int.mul_right_comm' y.num]
-  exact Int.mul_le_mul_of_nonneg_right' h h'
+  cnsimp only [zero_mul, mul_one] at h
+  exact mul_pos h z.ofNat_den_pos
 
-theorem Rat.mul_le_mul_of_nonpos_right {x y z : Rat} (h : z ≤ 0) (h' : x ≤ y) : y * z ≤ x * z := by
-  apply Rat.neg_le_neg_iff.mp
-  cnsimp only [← mul_neg]
-  exact Rat.mul_le_mul_of_nonneg_right (neg_nonneg.mpr h) h'
-
-theorem Rat.mul_le_mul_of_nonneg_left {x y z : Rat} (h : 0 ≤ z) (h' : x ≤ y) : z * x ≤ z * y := by
-  cnsimp only [mul_comm z]
-  exact Rat.mul_le_mul_of_nonneg_right h h'
-
-theorem Rat.mul_le_mul_of_nonpos_left {x y z : Rat} (h : z ≤ 0) (h' : x ≤ y) : z * y ≤ z * x := by
-  cnsimp only [mul_comm z]
-  exact Rat.mul_le_mul_of_nonpos_right h h'
-
-theorem Rat.ne_of_lt {x y : Rat} (h : x < y) : x ~!= y := by
-  intro h'
-  cnsimp [h'] at h
-  exact absurd h (Rat.lt_irrefl y)
-
-theorem Rat.ne_of_gt {x y : Rat} (h : y < x) : x ~!= y :=
-  (ne_of_lt h).symm
-
-theorem Rat.lt_of_le_of_ne {x y : Rat} (h : x ≤ y) (h' : x ~!= y) : x < y := by
-  cnsimp only [← Rat.not_le]
-  intro h''
-  exact absurd (Rat.le_antisymm h h'') h'
-
-theorem Rat.inv_nonneg {x : Rat} (h : 0 ≤ x) : 0 ≤ x⁻¹ := by
-  by_cases' h' : x ~= 0
-  · cnsimp only [h', inv_zero]
-    exact Rat.le_refl 0
-  · apply le_of_not_le
-    intro h''
-    replace h'' := Rat.mul_le_mul_of_nonneg_right h h''
-    cnsimp only [zero_mul, inv_mul_cancel h'] at h''
-    apply absurd h''
-    decide
-
-theorem Rat.inv_nonneg_iff {x : Rat} : 0 ≤ x⁻¹ ↔ 0 ≤ x := by
-  constructor
-  · intro h
-    have := Rat.inv_nonneg h
-    cnsimp at this
-    exact this
-  · exact Rat.inv_nonneg
-
-theorem Rat.inv_nonpos {x : Rat} (h : x ≤ 0) : x⁻¹ ≤ 0 := by
-  have := Rat.inv_nonneg (Rat.neg_nonneg.mpr h)
-  cnsimp only [Rat.inv_neg, Rat.neg_nonneg] at this
-  exact this
-
-theorem Rat.inv_nonpos_iff {x : Rat} : x⁻¹ ≤ 0 ↔ x ≤ 0 := by
-  have := Rat.inv_nonneg_iff (x := -x)
-  cnsimp only [Rat.inv_neg, Rat.neg_nonneg] at this
-  exact this
-
-theorem Rat.inv_pos_iff {x : Rat} : 0 < x⁻¹ ↔ 0 < x := by
-  cnsimp only [← Rat.not_le, Rat.inv_nonpos_iff, iff_self_iff_true]
-
-theorem Rat.inv_lt_zero_iff {x : Rat} : x⁻¹ < 0 ↔ x < 0 := by
-  cnsimp only [← Rat.not_le, Rat.inv_nonneg_iff, iff_self_iff_true]
-
-theorem Rat.le_of_mul_le_mul_right {x y z : Rat} (h : 0 < z) (h' : x * z ≤ y * z) : x ≤ y := by
-  calc
-    x ~= x * z * z⁻¹ := by cnsimp [mul_assoc, mul_inv_cancel (ne_of_gt h)]
-    _ ≤ y * z * z⁻¹ := mul_le_mul_of_nonneg_right (inv_nonneg (le_of_lt h)) h'
-    _ ~= y := by cnsimp [mul_assoc, mul_inv_cancel (ne_of_gt h)]
-
-theorem Rat.mul_le_mul_right_iff {x y z : Rat} (h : 0 < z) : x * z ≤ y * z ↔ x ≤ y :=
-  ⟨Rat.le_of_mul_le_mul_right h, Rat.mul_le_mul_of_nonneg_right (le_of_lt h)⟩
-
-theorem Rat.le_of_mul_le_mul_left {x y z : Rat} (h : 0 < z) (h' : z * x ≤ z * y) : x ≤ y := by
-  cnsimp only [mul_comm z] at h'
-  exact le_of_mul_le_mul_right h h'
-
-theorem Rat.mul_le_mul_left_iff {x y z : Rat} (h : 0 < z) : z * x ≤ z * y ↔ x ≤ y := by
-  cnsimp [mul_comm z, Rat.mul_le_mul_right_iff h]
-
-theorem Rat.mul_lt_mul_of_pos_right {x y z : Rat} (h : 0 < z) (h' : x < y) : x * z < y * z := by
-  cnsimp only [← Rat.not_le] at h' ⊢
-  intro h''
-  apply h'
-  exact Rat.le_of_mul_le_mul_right h h''
-
-theorem Rat.mul_lt_mul_of_pos_left {x y z : Rat} (h : 0 < x) (h' : y < z) : x * y < x * z := by
-  cnsimp only [mul_comm x]
-  exact Rat.mul_lt_mul_of_pos_right h h'
+instance : IsStrictOrderedRing Rat where
+  le_of_add_le_add_right _ _ _ := Rat.le_of_add_le_add_right
+  le_of_mul_le_mul_right _ _ _ := Rat.le_of_mul_le_mul_right
+  le_of_mul_le_mul_left a b c h h' := by
+    cnrw [mul_comm] at h'
+    exact Rat.le_of_mul_le_mul_right h h'
+  zero_le_one := by decide
 
 def Rat.abs : Rat → Rat
   | ⟨x, y, h⟩ => ⟨x.natAbs, y, h⟩
@@ -1072,7 +739,7 @@ theorem Rat.abs_neg (x : Rat) : (-x).abs ~= x.abs := by
 theorem Rat.abs_of_nonpos {x : Rat} (h : x ≤ 0) : x.abs ~= -x := by
   calc
     x.abs ~= (-x).abs := by cnsimp
-    _ ~= -x := Rat.abs_of_nonneg (Rat.neg_nonneg.mpr h)
+    _ ~= -x := Rat.abs_of_nonneg (neg_nonneg.mpr h)
 
 @[ccongr]
 theorem Rat.abs_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.abs ~= x₂.abs := by
@@ -1084,21 +751,21 @@ theorem Rat.abs_congr {x₁ x₂ : Rat} (hx : x₁ ~= x₂) : x₁.abs ~= x₂.a
 theorem Rat.abs_le {x y : Rat} : x.abs ≤ y ↔ x ≤ y ∧ -x ≤ y := by
   by_cases' h : 0 ≤ x
   · cnsimp only [Rat.abs_of_nonneg h]
-    have h' : -x ≤ 0 := Rat.neg_nonpos.mpr h
+    have h' : -x ≤ 0 := neg_nonpos.mpr h
     constructor
     · intro h''
       constructor
       · assumption
-      · exact Rat.le_trans h' (Rat.le_trans h h'')
+      · exact h'.trans (h.trans h'')
     · intro h''
       exact h''.1
-  · replace h := Rat.le_of_not_le h
+  · replace h := le_of_not_le h
     cnsimp only [Rat.abs_of_nonpos h]
-    have h' : 0 ≤ -x := Rat.neg_nonneg.mpr h
+    have h' : 0 ≤ -x := neg_nonneg.mpr h
     constructor
     · intro h''
       constructor
-      · exact Rat.le_trans h (Rat.le_trans h' h'')
+      · exact h.trans (h'.trans h'')
       · assumption
     · intro h''
       exact h''.2
@@ -1110,28 +777,20 @@ theorem Rat.le_abs {x y : Rat} : x ≤ y.abs ↔ x ≤ y ∨' x ≤ -y := by
     · exact Or'.inl
     · intro h'
       refine h'.elim id (fun h'' => ?_)
-      exact Rat.le_trans h'' (Rat.le_trans (Rat.neg_nonpos.mpr h) h)
+      exact Rat.le_trans h'' (Rat.le_trans (neg_nonpos.mpr h) h)
   · replace h := Rat.le_of_not_le h
     cnsimp only [Rat.abs_of_nonpos h]
     constructor
     · exact Or'.inr
     · intro h'
       refine h'.elim (fun h'' => ?_) id
-      exact Rat.le_trans h'' (Rat.le_trans h (Rat.neg_nonneg.mpr h))
+      exact Rat.le_trans h'' (Rat.le_trans h (neg_nonneg.mpr h))
 
 theorem Rat.abs_lt {x y : Rat} : x.abs < y ↔ x < y ∧ -x < y := by
-  cnsimp only [← Rat.not_le, Rat.le_abs, not_or', iff_self_iff_true]
+  cnsimp only [← not_le, Rat.le_abs, not_or', iff_self_iff_true]
 
 theorem Rat.lt_abs {x y : Rat} : x < y.abs ↔ x < y ∨' x < -y := by
-  cnsimp only [← Rat.not_le, Rat.abs_le, not_and_iff_not_or_not, iff_self_iff_true]
-
-theorem Rat.mul_pos {x y : Rat} (hx : 0 < x) (hy : 0 < y) : 0 < x * y := by
-  have := Rat.mul_lt_mul_of_pos_right hy hx
-  cnsimp only [zero_mul] at this
-  exact this
-
-theorem Rat.div_pos {x y : Rat} (hx : 0 < x) (hy : 0 < y) : 0 < x / y :=
-  Rat.mul_pos hx (Rat.inv_pos_iff.mpr hy)
+  cnsimp only [← not_le, Rat.abs_le, not_and_iff_not_or_not, iff_self_iff_true]
 
 theorem Rat.half_add_half (x : Rat) : x / 2 + x / 2 ~= x := by
   calc
@@ -1148,19 +807,19 @@ theorem Rat.abs_sub_lt_trans {x y z a b : Rat} (h : (y - x).abs < a) (h' : (z - 
     (z - x).abs < a + b := by
   cnsimp only [Rat.abs_lt, neg_sub] at *
   constructor
-  · have := Rat.add_lt_add h.1 h'.1
+  · have := add_lt_add h.1 h'.1.le
     cnsimp [sub_eq_add_neg, ← add_assoc, (add_right_comm · · (-y)), add_comm (-x)] at this
     exact this
-  · have := Rat.add_lt_add h.2 h'.2
+  · have := add_lt_add h.2 h'.2.le
     cnsimp [← add_sub_assoc] at this
     exact this
 
 theorem Rat.abs_add_lt {x y a b : Rat} (h : x.abs < a) (h' : y.abs < b) : (x + y).abs < a + b := by
   cnsimp only [Rat.abs_lt] at *
   constructor
-  · exact Rat.add_lt_add h.1 h'.1
+  · exact add_lt_add h.1 h'.1.le
   · cnsimp only [neg_add_rev, add_comm (-y)]
-    exact Rat.add_lt_add h.2 h'.2
+    exact add_lt_add h.2 h'.2.le
 
 @[cnsimp]
 theorem Rat.abs_ofNat (n : Nat) : Rat.abs (no_index (OfNat.ofNat n)) ~= no_index (OfNat.ofNat n) := by
@@ -1171,136 +830,6 @@ theorem Rat.natCast_zero : ((0 : Nat) : Rat) ~= 0 := by rfl
 
 theorem Rat.abs_zero : Rat.abs 0 ~= 0 := by
   rfl
-
-theorem Rat.sub_eq_iff_eq_add {x y z : Rat} : x - y ~= z ↔ x ~= z + y := by
-  constructor
-  · intro h
-    calc
-      x ~= x - y + y := by cnsimp
-      _ ~= z + y := by cnsimp only [h, eq'_self_iff]
-  · intro h
-    cnsimp [h]
-
-theorem Rat.sub_le_iff_le_add {x y z : Rat} : x - y ≤ z ↔ x ≤ z + y := by
-  constructor
-  · intro h
-    calc
-      x ~= x - y + y := by cnsimp
-      _ ≤ z + y := Rat.add_le_add_right h
-  · intro h
-    calc
-      x - y ~= x + -y := sub_eq_add_neg ..
-      x + -y ≤ z + y + -y := Rat.add_le_add_right h
-      _ ~= z := by cnsimp [add_assoc]
-
-theorem Rat.le_sub_iff_add_le {x y z : Rat} : x ≤ y - z ↔ x + z ≤ y := by
-  have := Rat.sub_le_iff_le_add (x := x) (y := -z) (z := y)
-  cnsimp [sub_eq_add_neg] at this ⊢
-  cnsimp [this]
-
-theorem Rat.sub_lt_iff_lt_add {x y z : Rat} : x - y < z ↔ x < z + y := by
-  cnsimp only [← Rat.not_le, Rat.le_sub_iff_add_le, iff_self_iff_true]
-
-theorem Rat.lt_sub_iff_add_lt {x y z : Rat} : x < y - z ↔ x + z < y := by
-  cnsimp only [← Rat.not_le, Rat.sub_le_iff_le_add, iff_self_iff_true]
-
-theorem Rat.add_pos {x y : Rat} (hx : 0 < x) (hy : 0 < y) : 0 < x + y := by
-  have : 0 + y < x + y := Rat.add_lt_add_right hx
-  cnsimp at this
-  exact Rat.lt_trans hy this
-
-theorem Rat.sub_lt_sub {a b c d : Rat} (h : a < c) (h' : d < b) :
-    a - b < c - d := by
-  cnsimp only [Rat.lt_sub_iff_add_lt, ← add_sub_comm, Rat.sub_lt_iff_lt_add]
-  exact Rat.add_lt_add h h'
-
-theorem Rat.sub_lt_sub_right {a b c : Rat} (h : a < b) : a - c < b - c := by
-  cnsimp [sub_eq_add_neg, h]
-
-theorem Rat.sub_lt_sub_left {a b c : Rat} (h : c < b) : a - b < a - c := by
-  cnsimp only [sub_eq_add_neg, h, Rat.add_le_add_iff_left, ← Rat.not_le, Rat.neg_le_neg_iff]
-  exact Rat.not_le.mpr h
-
-theorem Rat.sub_le_sub {a b c d : Rat} (h : a ≤ c) (h' : d ≤ b) :
-    a - b ≤ c - d := by
-  cnsimp only [Rat.le_sub_iff_add_le, ← add_sub_comm, Rat.sub_le_iff_le_add]
-  exact Rat.add_le_add h h'
-
-theorem Rat.sub_le_sub_right {a b c : Rat} (h : a ≤ b) : a - c ≤ b - c := by
-  cnsimp [sub_eq_add_neg, h]
-
-theorem Rat.sub_le_sub_left {a b c : Rat} (h : c ≤ b) : a - b ≤ a - c := by
-  cnsimp only [sub_eq_add_neg, h, Rat.add_le_add_iff_left, Rat.neg_le_neg_iff]
-
-theorem Rat.lt_of_mul_lt_mul_right {a b c : Rat} (h : a * c < b * c)
-    (hc : 0 ≤ c) : a < b := by
-  by_cases' h' : c ~= 0
-  · cnsimp [h'] at h
-    exact (Rat.lt_irrefl 0 h).elim
-  · have hc := Rat.lt_of_le_of_ne hc (Ne'.symm h')
-    have := Rat.mul_lt_mul_of_pos_right (Rat.inv_pos_iff.mpr hc) h
-    cnsimp only [mul_assoc, mul_inv_cancel (Rat.ne_of_gt hc), mul_one] at this
-    exact this
-
-theorem Rat.mul_lt_mul_right {a b c : Rat} (hc : 0 < c) : a * c < b * c ↔ a < b :=
-  ⟨(Rat.lt_of_mul_lt_mul_right · (Rat.le_of_lt hc)), Rat.mul_lt_mul_of_pos_right hc⟩
-
-theorem Rat.mul_lt_mul_left {a b c : Rat} (ha : 0 < a) : a * b < a * c ↔ b < c := by
-  cnsimp only [mul_comm a]
-  exact Rat.mul_lt_mul_right ha
-
-theorem Rat.mul_lt_mul {a b c d : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) (h : a < c) (h' : b < d) :
-    a * b < c * d := by
-  by_cases' h'' : b ~= 0
-  · cnsimp only [h'', mul_zero] at h' ⊢
-    exact Rat.mul_pos (Rat.lt_of_le_of_lt ha h) h'
-  calc
-    a * b < c * b := Rat.mul_lt_mul_of_pos_right (Rat.lt_of_le_of_ne hb (Ne'.symm h'')) h
-    c * b < c * d := Rat.mul_lt_mul_of_pos_left (Rat.lt_of_le_of_lt ha h) h'
-
-theorem Rat.mul_le_mul {a b c d : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) (h : a ≤ c) (h' : b ≤ d) :
-    a * b ≤ c * d := by
-  calc
-    a * b ≤ c * b := Rat.mul_le_mul_of_nonneg_right hb h
-    c * b ≤ c * d := Rat.mul_le_mul_of_nonneg_left (Rat.le_trans ha h) h'
-
-theorem Rat.inv_lt_symm {a b : Rat} (ha : 0 < a) (hb : 0 < b) : a⁻¹ < b ↔ b⁻¹ < a := by
-  calc
-    a⁻¹ < b ↔ a * a⁻¹ < a * b := (Rat.mul_lt_mul_left ha).symm
-    _ ↔ 1 < a * b := by cnsimp [mul_inv_cancel (Rat.ne_of_gt ha)]
-    _ ↔ 1 * b⁻¹ < a * b * b⁻¹ := (Rat.mul_lt_mul_right (Rat.inv_pos_iff.mpr hb)).symm
-    _ ↔ b⁻¹ < a := by cnsimp [mul_assoc, mul_inv_cancel (Rat.ne_of_gt hb)]
-
-theorem Rat.inv_lt_inv_iff {a b : Rat} (ha : 0 < a) (hb : 0 < b) : a⁻¹ < b⁻¹ ↔ b < a := by
-  cnsimp [Rat.inv_lt_symm ha (Rat.inv_pos_iff.mpr hb)]
-
-theorem Rat.inv_lt_inv_of_pos {a b : Rat} (ha : 0 < a) (h : a < b) : b⁻¹ < a⁻¹ :=
-  (Rat.inv_lt_inv_iff (Rat.lt_trans ha h) ha).mpr h
-
-theorem Rat.mul_nonneg {a b : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) : 0 ≤ a * b := by
-  have := Rat.mul_le_mul_of_nonneg_left ha hb
-  cnsimp at this
-  exact this
-
-theorem Rat.mul_nonneg_of_nonpos_of_nonpos {a b : Rat} (ha : a ≤ 0) (hb : b ≤ 0) : 0 ≤ a * b := by
-  have := Rat.mul_le_mul_of_nonpos_left ha hb
-  cnsimp at this
-  exact this
-
-theorem Rat.mul_nonpos_of_nonneg_of_nonpos {a b : Rat} (ha : 0 ≤ a) (hb : b ≤ 0) : a * b ≤ 0 := by
-  have := Rat.mul_le_mul_of_nonneg_left ha hb
-  cnsimp at this
-  exact this
-
-theorem Rat.mul_nonpos_of_nonpos_of_nonneg {a b : Rat} (ha : a ≤ 0) (hb : 0 ≤ b) : a * b ≤ 0 := by
-  have := Rat.mul_le_mul_of_nonneg_right hb ha
-  cnsimp at this
-  exact this
-
-theorem Rat.add_nonneg {a b : Rat} (ha : 0 ≤ a) (hb : 0 ≤ b) : 0 ≤ a + b := by
-  have : 0 + b ≤ a + b := Rat.add_le_add_right ha
-  cnsimp at this
-  exact trans hb this
 
 /-
 theorem Rat.something_inv_cauSeq {a b c d e : Rat}
@@ -1400,46 +929,6 @@ theorem Rat.le_max_right_le_right {x y z : Rat} (h : x ≤ z) : x ≤ y.max z :=
   · assumption
   · exact trans h (Rat.le_of_not_le ‹_›)
 
-theorem Rat.lt_add_right {x y : Rat} (hy : 0 < y) : x < x + y := by
-  calc
-    x ~= x + 0 := by cnsimp
-    _ < x + y := Rat.add_lt_add_left hy
-
-theorem Rat.lt_add_left {x y : Rat} (hx : 0 < x) : y < x + y := by
-  calc
-    y ~= 0 + y := by cnsimp
-    _ < x + y := Rat.add_lt_add_right hx
-
-theorem Rat.add_lt_left {x y : Rat} (hy : y < 0) : x + y < x := by
-  calc
-    x + y < x + 0 := Rat.add_lt_add_left hy
-    _ ~= x := by cnsimp
-
-theorem Rat.add_lt_right {x y : Rat} (hx : x < 0) : x + y < y := by
-  calc
-    x + y < 0 + y := Rat.add_lt_add_right hx
-    _ ~= y := by cnsimp
-
-theorem Rat.le_add_right {x y : Rat} (hy : 0 ≤ y) : x ≤ x + y := by
-  calc
-    x ~= x + 0 := by cnsimp
-    _ ≤ x + y := Rat.add_le_add_left hy
-
-theorem Rat.le_add_left {x y : Rat} (hx : 0 ≤ x) : y ≤ x + y := by
-  calc
-    y ~= 0 + y := by cnsimp
-    _ ≤ x + y := Rat.add_le_add_right hx
-
-theorem Rat.add_le_left {x y : Rat} (hy : y ≤ 0) : x + y ≤ x := by
-  calc
-    x + y ≤ x + 0 := Rat.add_le_add_left hy
-    _ ~= x := by cnsimp
-
-theorem Rat.add_le_right {x y : Rat} (hx : x ≤ 0) : x + y ≤ y := by
-  calc
-    x + y ≤ 0 + y := Rat.add_le_add_right hx
-    _ ~= y := by cnsimp
-
 theorem Rat.lt_max_of_lt_left {x y z : Rat} (h : x < y) : x < y.max z := by
   dsimp [max]
   split
@@ -1504,42 +993,21 @@ theorem Rat.min_lt_of_right_lt {x y z : Rat} (h : y < z) : x.min y < z := by
   · exact trans ‹_› h
   · assumption
 
-theorem Rat.div_le_iff {x y z : Rat} (hy : 0 < y) : x / y ≤ z ↔ x ≤ z * y := by
-  have : x / y ≤ z ↔ x / y * y ≤ z * y := (Rat.mul_le_mul_right_iff hy).symm
-  cnsimp [div_mul_cancel (Rat.ne_of_gt hy)] at this
-  exact this
-
-theorem Rat.le_div_iff {x y z : Rat} (hz : 0 < z) : x ≤ y / z ↔ x * z ≤ y := by
-  have : x ≤ y / z ↔ x * z ≤ y / z * z := (Rat.mul_le_mul_right_iff hz).symm
-  cnsimp [div_mul_cancel (Rat.ne_of_gt hz)] at this
-  exact this
-
-theorem Rat.div_lt_iff {x y z : Rat} (hy : 0 < y) : x / y < z ↔ x < z * y := by
-  cnsimp only [← Rat.not_le, Rat.le_div_iff hy, iff_self_iff_true]
-
-theorem Rat.lt_div_iff {x y z : Rat} (hz : 0 < z) : x < y / z ↔ x * z < y := by
-  cnsimp only [← Rat.not_le, Rat.div_le_iff hz, iff_self_iff_true]
-
 theorem Rat.le_abs_self (x : Rat) : x ≤ x.abs := by
   cnsimp [Rat.le_abs]
-  exact Or'.inl (Rat.le_refl _)
 
 theorem Rat.neg_abs_le_self (x : Rat) : -x.abs ≤ x := by
-  cnsimp only [Rat.neg_le_comm x.abs, Rat.le_abs]
-  exact Or'.inr (Rat.le_refl _)
+  cnsimp [neg_le_comm x.abs, Rat.le_abs]
 
 theorem Rat.neg_le_abs_self (x : Rat) : -x ≤ x.abs := by
   cnsimp only [Rat.le_abs]
   exact Or'.inr (Rat.le_refl _)
 
-theorem Rat.sub_neg (x y : Rat) : x - (-y) ~= x + y := by
-  cnsimp [sub_eq_add_neg]
-
 theorem Rat.abs_sub_abs_le (x y : Rat) : x.abs - y.abs ≤ (x - y).abs := by
   by_cases' h : 0 ≤ x
   · cnsimp only [Rat.abs_of_nonneg h, Rat.le_abs]
     apply Or'.inl
-    apply Rat.sub_le_sub_left
+    apply sub_le_sub_left
     exact Rat.le_abs_self _
   · replace h := Rat.le_of_not_le h
     cnsimp only [Rat.abs_of_nonpos h, Rat.le_abs, neg_sub]
@@ -1551,21 +1019,21 @@ theorem Rat.abs_mul (x y : Rat) : (x * y).abs ~= x.abs * y.abs := by
   by_cases' h : 0 ≤ x
   · cnsimp only [Rat.abs_of_nonneg h]
     by_cases' h' : 0 ≤ y
-    · cnsimp [Rat.abs_of_nonneg h', Rat.abs_of_nonneg (Rat.mul_nonneg h h')]
+    · cnsimp [Rat.abs_of_nonneg h', Rat.abs_of_nonneg (mul_nonneg h h')]
     · replace h' := Rat.le_of_not_le h'
-      cnsimp [Rat.abs_of_nonpos h', Rat.abs_of_nonpos (Rat.mul_nonpos_of_nonneg_of_nonpos h h')]
+      cnsimp [Rat.abs_of_nonpos h', Rat.abs_of_nonpos (mul_nonpos_of_nonneg_of_nonpos h h')]
   · replace h := Rat.le_of_not_le h
     cnsimp only [Rat.abs_of_nonpos h]
     by_cases' h' : 0 ≤ y
-    · cnsimp [Rat.abs_of_nonneg h', Rat.abs_of_nonpos (Rat.mul_nonpos_of_nonpos_of_nonneg h h')]
+    · cnsimp [Rat.abs_of_nonneg h', Rat.abs_of_nonpos (mul_nonpos_of_nonpos_of_nonneg h h')]
     · replace h' := Rat.le_of_not_le h'
-      cnsimp [Rat.abs_of_nonpos h', Rat.abs_of_nonneg (Rat.mul_nonneg_of_nonpos_of_nonpos h h')]
+      cnsimp [Rat.abs_of_nonpos h', Rat.abs_of_nonneg (mul_nonneg_of_nonpos_of_nonpos h h')]
 
 theorem Rat.abs_inv (x : Rat) : x⁻¹.abs ~= x.abs⁻¹ := by
   by_cases' h : 0 ≤ x
-  · cnsimp [Rat.abs_of_nonneg h, Rat.abs_of_nonneg (Rat.inv_nonneg h)]
+  · cnsimp [Rat.abs_of_nonneg h, Rat.abs_of_nonneg (inv_nonneg_of_nonneg h)]
   · replace h := Rat.le_of_not_le h
-    cnsimp [Rat.abs_of_nonpos h, Rat.abs_of_nonpos (Rat.inv_nonpos h), Rat.inv_neg]
+    cnsimp [Rat.abs_of_nonpos h, Rat.abs_of_nonpos (inv_nonpos_of_nonpos h), inv_neg]
 
 theorem Rat.abs_div (x y : Rat) : (x / y).abs ~= x.abs / y.abs := by
   cnsimp [div_eq_mul_inv, Rat.abs_mul, Rat.abs_inv]
@@ -1573,10 +1041,10 @@ theorem Rat.abs_div (x y : Rat) : (x / y).abs ~= x.abs / y.abs := by
 theorem Rat.abs_add_le (x y : Rat) : (x + y).abs ≤ x.abs + y.abs := by
   cnsimp only [Rat.abs_le]
   constructor
-  · apply Rat.add_le_add
+  · apply add_le_add
     · exact Rat.le_abs_self x
     · exact Rat.le_abs_self y
   · cnsimp only [neg_add_rev, add_comm (-y)]
-    apply Rat.add_le_add
+    apply add_le_add
     · exact Rat.neg_le_abs_self x
     · exact Rat.neg_le_abs_self y

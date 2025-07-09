@@ -188,7 +188,10 @@ instance : IsStrictOrderedRing Nat where
     induction c with
     | zero => exact h
     | succ k ih => exact ih (Nat.le_of_succ_le_succ h)
+  le_of_mul_le_mul_left a b c h h' := Nat.le_of_mul_le_mul_right (Nat.mul_comm a b ▸ Nat.mul_comm a c ▸ h') h
   le_of_mul_le_mul_right _ _ _ h h' := Nat.le_of_mul_le_mul_right h' h
+  exists_pair_ne := .intro 0 (.intro 1 (show 0 ≠ 1 from by decide))
+  zero_le_one := by decide
 
 instance : AddCongr Int where
   add_congr h h' := h ▸ h' ▸ rfl
@@ -569,4 +572,7 @@ instance : IsStrictOrderedRing Int where
     change a + c + z ~= b + c at hz
     cnrw [add_right_comm a, add_left_inj] at hz
     exact hz
+  le_of_mul_le_mul_left a b c h h' := Int.le_of_mul_le_mul_right' h (Int.mul_comm' a b ▸ Int.mul_comm' a c ▸ h')
   le_of_mul_le_mul_right _ _ _ := Int.le_of_mul_le_mul_right'
+  exists_pair_ne := .intro 0 (.intro 1 (show 0 ≠ 1 from by decide))
+  zero_le_one := by decide

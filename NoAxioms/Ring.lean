@@ -128,6 +128,31 @@ theorem neg_add_cancel [Eqv α] [AddGroup α] (x : α) : -x + x ~= 0 := AddGroup
 theorem inv_zero [Eqv α] [GroupWithZero α] : (0 : α)⁻¹ ~= 0 :=
   GroupWithZero.inv_zero
 
+theorem zero_ne_one [Eqv α] [MonoidWithZero α] [Nontrivial α] : (0 : α) ~!= 1 := by
+  intro h
+  have : ∃' x y : α, x ~!= y := Nontrivial.exists_pair_ne
+  refine this.elim fun a ha => ha.elim fun b hb => ?_
+  apply hb
+  calc
+    a ~= a * 1 := by cnsimp
+    _ ~= 0 := by cnsimp only [← h, mul_zero, eq'_self_iff]
+    _ ~= b * 1 := by cnsimp only [← h, mul_zero, eq'_self_iff]
+    _ ~= b := by cnsimp
+
+theorem inv_eq_of_mul_eq_one [Eqv α] [GroupWithZero α] {x y : α} (h : x * y ~= 1) : x⁻¹ ~= y := by
+  have hx : x ~!= 0 := by
+    intro hx
+    cnsimp only [hx, zero_mul] at h
+    exact zero_ne_one h
+  calc
+    x⁻¹ ~= x⁻¹ * (x * y) := by cnsimp [h]
+    _ ~= y := by cnsimp [← mul_assoc, inv_mul_cancel hx]
+
+theorem neg_eq_of_add_eq_zero [Eqv α] [AddGroup α] {x y : α} (h : x + y ~= 0) : -x ~= y := by
+  calc
+    -x ~= -x + (x + y) := by cnsimp [h]
+    _ ~= y := by cnsimp [← add_assoc]
+
 theorem inv_eq_zero_iff [Eqv α] [GroupWithZero α] {x : α} : x⁻¹ ~= 0 ↔ x ~= 0 := by
   constructor
   · intro h
@@ -167,17 +192,6 @@ theorem add_neg_cancel [Eqv α] [AddGroup α] (x : α) : x + -x ~= 0 := by
   calc
     x + -x ~= -(-x) + -x := by cnsimp only [neg_neg, eq'_self_iff]
     _ ~= 0 := by cnsimp only [neg_add_cancel, eq'_self_iff]
-
-theorem zero_ne_one [Eqv α] [GroupWithZero α] : (0 : α) ~!= 1 := by
-  intro h
-  have : ∃' x y : α, x ~!= y := Nontrivial.exists_pair_ne
-  refine this.elim fun a ha => ha.elim fun b hb => ?_
-  apply hb
-  calc
-    a ~= a * 1 := by cnsimp
-    _ ~= 0 := by cnsimp only [← h, mul_zero, eq'_self_iff]
-    _ ~= b * 1 := by cnsimp only [← h, mul_zero, eq'_self_iff]
-    _ ~= b := by cnsimp
 
 theorem div_self [Eqv α] [GroupWithZero α] {x : α} (h : x ~!= 0) : x / x ~= 1 := by
   cnsimp only [div_eq_mul_inv, mul_inv_cancel h, eq'_self_iff]
@@ -412,6 +426,12 @@ theorem eq_sub_iff_add_eq [Eqv α] [AddGroup α] {x y z : α} : x ~= y - z ↔ x
   cnsimp at this
   exact this
 
+theorem neg_eq_zero_iff [Eqv α] [AddGroup α] {x : α} : -x ~= 0 ↔ x ~= 0 := by
+  calc
+    _ ↔ x + -x ~= x + 0 := add_left_cancel_iff.symm
+    _ ↔ 0 ~= x := by cnsimp
+    _ ↔ x ~= 0 := eq'_comm
+
 class CommMonoid (α : Type u) [Eqv α] extends Monoid α where
   mul_comm (x y : α) : x * y ~= y * x
 
@@ -573,3 +593,10 @@ theorem sub_mul [Eqv α] [Ring α] (x y z : α) : (x - y) * z ~= x * z - y * z :
 class Semifield (α : Type u) [Eqv α] extends CommSemiring α, GroupWithZero α
 
 class Field (α : Type u) [Eqv α] extends Semifield α, CommRing α
+
+@[cnsimp]
+theorem inv_neg [Eqv α] [Field α] {x : α} : (-x)⁻¹ ~= -x⁻¹ := by
+  by_cases' h : x ~= 0
+  · cnsimp [h]
+  apply inv_eq_of_mul_eq_one
+  cnsimp [mul_inv_cancel h]
